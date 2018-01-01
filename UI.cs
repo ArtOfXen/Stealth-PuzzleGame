@@ -14,22 +14,32 @@ namespace Game1
         Texture2D sprite;
         Vector2 position;
         float scale;
+        bool active;
 
-        public UI (Texture2D newSprite, Vector2 newPosition)
+        public UI (Texture2D newSprite, Vector2 newPosition, float newScale, bool initiallyActive)
         {
             sprite = newSprite;
             position = newPosition;
-            scale = 3f;
+            scale = newScale;
+            active = initiallyActive;
         }
 
         public void draw(SpriteBatch spriteBatch)
         {
-            spriteBatch.Draw(sprite, position, null, Color.White, 0f, new Vector2(sprite.Width / 2, sprite.Height / 2), scale, SpriteEffects.None, 0.5f);
+            if (active)
+            {
+                spriteBatch.Draw(sprite, position, null, Color.White, 0f, new Vector2(sprite.Width / 2, sprite.Height / 2), scale, SpriteEffects.None, 0.5f);
+            }
         }
 
         public void setSprite(Texture2D newSprite)
         {
             sprite = newSprite;
+        }
+
+        public void setActive(bool isActive)
+        {
+            active = isActive;
         }
     }
 }

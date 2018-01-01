@@ -7,6 +7,8 @@ using System.Collections.Generic;
 
 // TODO
 // Allow pull projectile to pull enemies AWAY from walls
+// Player/hazard collisions
+// Level creation
 
 
 namespace Game1
@@ -63,10 +65,11 @@ namespace Game1
         ActorModel gateWalls;
         ActorModel floorModel;
 
-        Texture2D shockUIUnselected;
-        Texture2D shockUISelected;
-        Texture2D pullUIUnselected;
-        Texture2D pullUISelected;
+        Texture2D shockUnselectedTexture;
+        Texture2D shockSelectedTexture;
+        Texture2D pullUnselectedTexture;
+        Texture2D pullSelectedTexture;
+        Texture2D gameOverTexture;
 
         ProjectileStruct shock;
         ProjectileStruct pull;
@@ -86,6 +89,7 @@ namespace Game1
 
         UI shockUI;
         UI pullUI;
+        UI gameOverUI;
         
         struct Bounds
         {
@@ -169,11 +173,13 @@ namespace Game1
 
             shock.classification = ProjectileClassification.shock;
             shock.moveSpeed = 16;
-            shockUI = new UI(shockUISelected, new Vector2(screenCentreX - 100f, GraphicsDevice.Viewport.Height - 100f));
+            shockUI = new UI(shockSelectedTexture, new Vector2(screenCentreX - 100f, GraphicsDevice.Viewport.Height - 100f), 3f, true);
 
             pull.classification = ProjectileClassification.pull;
             pull.moveSpeed = 12;
-            pullUI = new UI(pullUIUnselected, new Vector2(screenCentreX + 100f, GraphicsDevice.Viewport.Height - 100f));
+            pullUI = new UI(pullUnselectedTexture, new Vector2(screenCentreX + 100f, GraphicsDevice.Viewport.Height - 100f), 3f, true);
+
+            gameOverUI = new UI(gameOverTexture, new Vector2(screenCentreX, screenCentreY), 2f, false);
 
             gunLoaded = true;
             loadedProjectile = shock;
@@ -213,10 +219,11 @@ namespace Game1
             armoured.unalertModel = new ActorModel(Content.Load<Model>("ArmouredRobotUnalert"), true, true);
             armoured.alertModel = new ActorModel(Content.Load<Model>("ArmouredRobotAlert"), true, true);
 
-            shockUISelected = Content.Load<Texture2D>("UIShockSelected");
-            shockUIUnselected = Content.Load<Texture2D>("UIShockUnselected");
-            pullUISelected = Content.Load<Texture2D>("UIPullSelected");
-            pullUIUnselected = Content.Load<Texture2D>("UIPullUnselected");
+            shockSelectedTexture = Content.Load<Texture2D>("UIShockSelected");
+            shockUnselectedTexture = Content.Load<Texture2D>("UIShockUnselected");
+            pullSelectedTexture = Content.Load<Texture2D>("UIPullSelected");
+            pullUnselectedTexture = Content.Load<Texture2D>("UIPullUnselected");
+            gameOverTexture = Content.Load<Texture2D>("UIGameOver");
         }
 
         protected override void UnloadContent()
@@ -238,6 +245,7 @@ namespace Game1
             // store all actors that can interact with others in the same list
             foreach (Actor t in terrain)
             {
+                t.updateHitboxes();
                 activeActors.Add(t);
             }
             foreach(NPC n in guards)
@@ -246,25 +254,29 @@ namespace Game1
             }
             foreach(Actor h in hazards)
             {
+                h.updateHitboxes();
                 activeActors.Add(h);
             }
 
 
             player.updateHitboxes();
 
+            /*
+             * CHECK PLAYER HAZARD COLLISIONS
+             */
 
             // Update guards
             foreach (NPC g in guards)
             {
                 if (!g.isDead())
                 {
-                    g.move(new Vector3(0f, 0f, 0.11f));
                     g.update(activeActors);
 
                     // detect player if collide with enemy
                     if (player.collisionHitbox.Intersects(g.collisionHitbox))
                     {
                         g.detectPlayer();
+                        gameOverUI.setActive(true);
                     }
                     // detect player if collides with area in front of enemy
                     else
@@ -274,6 +286,7 @@ namespace Game1
                             if (player.collisionHitbox.Intersects(b))
                             {
                                 g.detectPlayer();
+                                gameOverUI.setActive(true);
                             }
                         }
                     }
@@ -286,6 +299,15 @@ namespace Game1
                             g.kill();
                         }
                     }
+                }
+            }
+
+            foreach(Hazard h in hazards)
+            {
+                // hazard / player collision
+                if (h.collisionHitbox.Intersects(player.collisionHitbox))
+                {
+                    gameOverUI.setActive(true);
                 }
             }
 
@@ -414,14 +436,14 @@ namespace Game1
                 if (keyboard.IsKeyDown(Keys.D1) || keyboard.IsKeyDown(Keys.NumPad1))
                 {
                     loadedProjectile = shock;
-                    shockUI.setSprite(shockUISelected);
-                    pullUI.setSprite(pullUIUnselected);
+                    shockUI.setSprite(shockSelectedTexture);
+                    pullUI.setSprite(pullUnselectedTexture);
                 }
                 if (keyboard.IsKeyDown(Keys.D2) || keyboard.IsKeyDown(Keys.NumPad2))
                 {
                     loadedProjectile = pull;
-                    shockUI.setSprite(shockUIUnselected);
-                    pullUI.setSprite(pullUISelected);
+                    shockUI.setSprite(shockUnselectedTexture);
+                    pullUI.setSprite(pullSelectedTexture);
                 }
 
 
@@ -480,6 +502,7 @@ namespace Game1
 
             shockUI.draw(spriteBatch);
             pullUI.draw(spriteBatch);
+            gameOverUI.draw(spriteBatch);
 
             spriteBatch.End();
 
@@ -530,13 +553,10 @@ namespace Game1
 
         public void buildTestLevel()
         {
-            createShockGate(new Vector3(0f, 0f, -125f));
+            createShockGate(new Vector3(500f, 0f, -125f));
 
-            for (int i = 0; i < 1; i++)
-            {
-                // directly behind and facing the player
-                guards.Add(new NPC(pawn, new Vector3(0f, 0f, -500f), pawn.moveSpeed));
-            }
+            guards.Add(new NPC(pawn, new Vector3(-500f, 0f, -500f), pawn.moveSpeed));
+            guards.Add(new NPC(armoured, new Vector3(500f, 0f, -500f), armoured.moveSpeed));
         }
 
         public void buildStandardLevel()
