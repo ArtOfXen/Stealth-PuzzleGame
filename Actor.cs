@@ -162,6 +162,16 @@ namespace Game1
             updateHitboxes();
         }
 
+        public Vector3 positionMax()
+        {
+            return new Vector3(position.X + modelData.boxExtents.X, position.Y + modelData.boxSize.Y, position.Z + modelData.boxExtents.Z);
+        }
+
+        public Vector3 positionMin()
+        {
+            return new Vector3(position.X - modelData.boxExtents.X, position.Y, position.Z - modelData.boxExtents.Z);
+        }
+
         public void attachNewActor(ActorModel newModel, Vector3 displacementFromParent, float angleInRadians)
         {
             attachedActors.Add(new Actor(newModel, position + displacementFromParent));

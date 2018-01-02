@@ -6,8 +6,8 @@ using System.Collections.Generic;
 
 
 // TODO
-// Allow pull projectile to pull enemies AWAY from walls
-// Player/hazard collisions
+// FIX PULL PROJECTILES STAYING IN PLAY AFTER USE
+// Fix: Enemies die when colliding with the sides of a hazard - hitbox too big
 // Level creation
 
 
@@ -258,14 +258,18 @@ namespace Game1
                 activeActors.Add(h);
             }
 
-
+            // player updates
             player.updateHitboxes();
+            foreach (Hazard h in hazards)
+            {
+                // hazard / player collision
+                if (h.collisionHitbox.Intersects(player.collisionHitbox))
+                {
+                    gameOverUI.setActive(true);
+                }
+            }
 
-            /*
-             * CHECK PLAYER HAZARD COLLISIONS
-             */
-
-            // Update guards
+            // guard updates
             foreach (NPC g in guards)
             {
                 if (!g.isDead())
@@ -301,16 +305,8 @@ namespace Game1
                     }
                 }
             }
-
-            foreach(Hazard h in hazards)
-            {
-                // hazard / player collision
-                if (h.collisionHitbox.Intersects(player.collisionHitbox))
-                {
-                    gameOverUI.setActive(true);
-                }
-            }
-
+            
+            // projectile updates
             foreach(Projectile pj in allProjectiles)
             {
                 bool destroyProjectile = false;
@@ -342,9 +338,7 @@ namespace Game1
                         // in range of enemy when activated
                         if (pj.enemyInActionRadius(g.collisionHitbox))
                         {
-                            
-                            // move enemy towards pull projectile if not blocked
-                            g.move(new Vector3(pj.position.X - g.position.X, 0f, pj.position.Z - g.position.Z) / 60);
+                           g.move(new Vector3(pj.position.X - g.position.X, 0f, pj.position.Z - g.position.Z) / 60, terrain);
                         }
                     }
 
@@ -554,6 +548,7 @@ namespace Game1
         public void buildTestLevel()
         {
             createShockGate(new Vector3(500f, 0f, -125f));
+            //createWall(new Vector3(500f, 0f, -125f));
 
             guards.Add(new NPC(pawn, new Vector3(-500f, 0f, -500f), pawn.moveSpeed));
             guards.Add(new NPC(armoured, new Vector3(500f, 0f, -500f), armoured.moveSpeed));

@@ -35,6 +35,19 @@ namespace Game1
         }
 
 
+        public void patrol()
+        {
+            /* store a list of patrol markers, which the enemy moves between.
+             * store current and last patrol marker visited, as well as which
+             * markers are adjacent to which.
+             * when reaching a marker, get adjacent markers.
+             * decide which marker to move to next by elimination last visited
+             * marker from adjacent markers, and move towards remaining one.
+             * if only adjacent marker is last visited marker, end of route has
+             * been reached. Turn around and revisit that marker.
+             */
+        }
+
         public void update(List<Actor> visionBlockers)
         {
             updateHitboxes();
@@ -46,7 +59,7 @@ namespace Game1
             // converts Vector3Nullable to Vector3
             Vector3 displacement = changeInPosition ?? default(Vector3);
 
-            if (!dead)
+            if (!dead && !wouldCollideWithTerrain(position + (speed * displacement), movementBlockers))
             {
                 displace(displacement);
             }
