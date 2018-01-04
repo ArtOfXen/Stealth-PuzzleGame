@@ -518,10 +518,18 @@ namespace Game1
         {
             Hazard newShockGate = new Hazard(electricBeams, position);
 
+            // left wall
             newShockGate.attachNewActor(gateWalls, new Vector3(-newShockGate.getModelData().boxExtents.X, 0f, 0f), 0f);
+            // right wall
             newShockGate.attachNewActor(gateWalls, new Vector3(newShockGate.getModelData().boxExtents.X, 0f, 0f), 0f);
 
             hazards.Add(newShockGate);
+
+            for(int i = 1; i <newShockGate.numberOfAttachedActors() - 1; i++)
+            {
+                newShockGate.getAttachedActor(i).getModelData().resizeHitbox(new Vector3(0.5f, 1f, 1f));
+                terrain.Add(newShockGate.getAttachedActor(i));
+            }
         }
 
         public Projectile createNewProjectile(ProjectileClassification classToAdd)
@@ -547,11 +555,12 @@ namespace Game1
 
         public void buildTestLevel()
         {
-            createShockGate(new Vector3(500f, 0f, -125f));
+            createShockGate(new Vector3(500f, 0f, -300f));
             //createWall(new Vector3(500f, 0f, -125f));
 
             guards.Add(new NPC(pawn, new Vector3(-500f, 0f, -500f), pawn.moveSpeed));
             guards.Add(new NPC(armoured, new Vector3(500f, 0f, -500f), armoured.moveSpeed));
+            guards.Add(new NPC(pawn, new Vector3(-800f, 0f, -500f), pawn.moveSpeed));
         }
 
         public void buildStandardLevel()

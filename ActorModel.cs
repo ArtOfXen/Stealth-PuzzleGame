@@ -77,6 +77,12 @@ namespace Game1
             }
         }
 
+        public void resizeHitbox(Vector3 multiplier)
+        {
+            boxSize = boxSize * multiplier;
+            boxExtents = boxExtents * multiplier;
+        }
+
         public static void setWorldMatrix(Matrix newWorldMatrix)
         {
             worldMatrix = newWorldMatrix;

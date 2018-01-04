@@ -17,5 +17,23 @@ namespace Game1
         {
 
         }
+
+        public bool checkForHazardCollision(Actor collidingActor)
+        {
+            /// 
+            if (collisionHitbox.Intersects(collidingActor.collisionHitbox))
+            {
+                for (int i = 1; i < attachedActors.Count - 1; i++)
+                {
+                    if (attachedActors[i].collisionHitbox.Intersects(collidingActor.collisionHitbox))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+            return false;
+        }
     }
 }
