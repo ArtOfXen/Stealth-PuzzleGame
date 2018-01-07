@@ -45,7 +45,7 @@ namespace Game1
                     currentSeconds += 60;
                 }
 
-                if (currentSeconds > pullStartSeconds + pullAnimationLength)
+                if (currentSeconds >= pullStartSeconds + pullAnimationLength)
                 {
                     requiresDeletion = true;
                 }

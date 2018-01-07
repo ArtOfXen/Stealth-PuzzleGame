@@ -8,6 +8,7 @@ using System.Collections.Generic;
 // TODO
 // FIX PULL PROJECTILES STAYING IN PLAY AFTER USE
 // Fix: Enemies die when colliding with the sides of a hazard - hitbox too big
+    // fixed: requires more testing though
 // Level creation
 
 
@@ -327,8 +328,9 @@ namespace Game1
                         if (pj.getClassification() == ProjectileClassification.shock && g.isEffectedBy(pj.getClassification()))
                         {
                             g.kill();
+                            destroyProjectile = true;
                         }
-                        destroyProjectile = true;
+
                         break;
                     }
 
@@ -527,7 +529,7 @@ namespace Game1
 
             for(int i = 1; i <newShockGate.numberOfAttachedActors() - 1; i++)
             {
-                newShockGate.getAttachedActor(i).getModelData().resizeHitbox(new Vector3(0.5f, 1f, 1f));
+                newShockGate.getAttachedActor(i).getModelData().resizeHitbox(new Vector3(0.5f, 1f, 1f)); // shrink attached walls, otherwise they interfere with shock gate collision detection
                 terrain.Add(newShockGate.getAttachedActor(i));
             }
         }
