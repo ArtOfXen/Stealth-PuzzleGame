@@ -3,13 +3,18 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 
 // TODO
-// FIX PULL PROJECTILES STAYING IN PLAY AFTER USE
 // Fix: Enemies die when colliding with the sides of a hazard - hitbox too big
-    // fixed: requires more testing though
+    // Fixed? requires more testing
+
+// make pull affect hazards instead of enemies, pull hazards into enemies
+
 // Level creation
+
+// add objective to reach? Or just kill all enemies?
 
 
 namespace Game1
@@ -65,6 +70,7 @@ namespace Game1
         ActorModel electricBeams;
         ActorModel gateWalls;
         ActorModel floorModel;
+        ActorModel floorSegmentModel;
 
         Texture2D shockUnselectedTexture;
         Texture2D shockSelectedTexture;
@@ -79,12 +85,16 @@ namespace Game1
         EnemyStruct armoured;
 
         Player player;
+        List<string> level;
+
         List<Actor> terrain;
+        List<Actor> floor;
         List<Projectile> allProjectiles;
         List<NPC> guards;
         List<Hazard> hazards;
 
-        Actor floor;
+        //Actor floor;
+        Actor floorSegment;
 
         ProjectileStruct loadedProjectile;
 
@@ -116,6 +126,7 @@ namespace Game1
             //set up camera
             overheadCamTarget = new Vector3(0f, 0f, 0f);
             overheadCamPosition = new Vector3(0f, 1500f, 750f);
+
             overheadProjectionMatrix = Matrix.CreateOrthographic(GraphicsDevice.Viewport.Width * 2, GraphicsDevice.Viewport.Height * 2, 0f, 3000f);
             overheadViewMatrix = Matrix.CreateLookAt(overheadCamPosition, overheadCamTarget, new Vector3(0f, 1f, 0f));
 
@@ -140,6 +151,19 @@ namespace Game1
             upRight = new Direction(135f, new Vector3(-1f, 0f, -1f));
             up = new Direction(180f, new Vector3(0f, 0f, -1f));
 
+            level = new List<string>();
+
+            using (var stream = TitleContainer.OpenStream("LevelFile.txt"))
+            {
+                using (var reader = new StreamReader(stream))
+                {
+                    while (!reader.EndOfStream)
+                    {
+                        level.Add(reader.ReadLine());
+                    }
+                }
+            }
+
             Mouse.SetPosition((int)screenCentreX, (int)screenCentreY);
             this.IsMouseVisible = false;
 
@@ -157,6 +181,8 @@ namespace Game1
             player = new Player(playerModel, new Vector3(0f, 0f, 0f), 6);
 
             terrain = new List<Actor>();
+
+            floor = new List<Actor>();
 
             guards = new List<NPC>();
 
@@ -192,8 +218,10 @@ namespace Game1
             levelBounds.left = -GraphicsDevice.Viewport.Width + wall.boxSize.X;
             levelBounds.right = GraphicsDevice.Viewport.Height - wall.boxSize.X;
 
-            buildStandardLevel();
-            buildTestLevel();
+            createLevel(level);
+
+            //buildStandardLevel();
+            //buildTestLevel();
         }
 
         protected override void LoadContent()
@@ -208,6 +236,7 @@ namespace Game1
             wall = new ActorModel(Content.Load<Model>("WallSegment"), true, true);
             gateWalls = new ActorModel(Content.Load<Model>("ElectricGateWall"), true, true);
             floorModel = new ActorModel(Content.Load<Model>("Floor"), false, false);
+            floorSegmentModel = new ActorModel(Content.Load<Model>("FloorSegment"), false, false);
 
             electricBeams = new ActorModel(Content.Load<Model>("ElectricGateBeams"), false, false);
 
@@ -234,6 +263,9 @@ namespace Game1
 
         protected override void Update(GameTime gameTime)
         {
+            Vector3 playerDisplacement = new Vector3(0f, 0f, 0f);
+            bool onFloor;
+
             List<Actor> activeActors = new List<Actor>();
             List<Projectile> activeProjectiles = new List<Projectile>();
             KeyboardState keyboard = Keyboard.GetState();
@@ -260,6 +292,9 @@ namespace Game1
             }
 
             // player updates
+
+            onFloor = false;
+
             player.updateHitboxes();
             foreach (Hazard h in hazards)
             {
@@ -270,11 +305,41 @@ namespace Game1
                 }
             }
 
+            foreach(Actor f in floor)
+            {
+                if (f.collisionHitbox.Intersects(player.underfootHitbox))
+                {
+                    onFloor = true;
+                    break;
+                }
+            }
+
+            if (!onFloor)
+            {
+                player.Falling = true;
+            }
+
             // guard updates
             foreach (NPC g in guards)
             {
                 if (!g.isDead())
                 {
+                    onFloor = false;
+
+                    foreach(Actor f in floor)
+                    {
+                        if (f.collisionHitbox.Intersects(g.underfootHitbox))
+                        {
+                            onFloor = true;
+                            break;
+                        }
+                    }
+
+                    if (!onFloor)
+                    {
+                        g.Falling = true;
+                    }
+
                     g.update(activeActors);
 
                     // detect player if collide with enemy
@@ -304,6 +369,10 @@ namespace Game1
                             g.kill();
                         }
                     }
+
+                    /* check for guard falling
+                     * if not colliding with ground, set falling to true
+                     */
                 }
             }
             
@@ -369,15 +438,34 @@ namespace Game1
             // STRATEGIC VIEW
             if (keyboard.IsKeyDown(Keys.Tab))
             {
+                overheadCamTarget = player.position;
+                overheadCamPosition = new Vector3(player.position.X, 1000f, player.position.Z + 1f);
+                overheadProjectionMatrix = Matrix.CreateOrthographic(GraphicsDevice.Viewport.Width * 2, GraphicsDevice.Viewport.Height * 2, 0f, 3000f);
+                overheadViewMatrix = Matrix.CreateLookAt(overheadCamPosition, overheadCamTarget, new Vector3(0f, 1f, 0f));
+
                 projectionMatrix = overheadProjectionMatrix;
                 viewMatrix = overheadViewMatrix;
+
+                // shrink Y-scale of walls
             }
 
             // FIRST PERSON VIEW
             else
             {
-               // MOUSE INPUT
-               if (mouse.X != screenCentreX)
+                //set up first person camera
+                firstPersonCamPosition = new Vector3(player.position.X, playerModel.boxSize.Y * 3 / 5 + player.position.Y, player.position.Z);
+                firstPersonCamTarget = firstPersonCamPosition + Vector3.Transform(new Vector3(0f, 0f, 1f), player.rotation);
+
+                // set up first person matrices
+                firstPersonProjectionMatrix = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(135), graphics.PreferredBackBufferWidth / graphics.PreferredBackBufferHeight, playerModel.boxExtents.X, 3000f);
+                firstPersonViewMatrix = Matrix.CreateLookAt(firstPersonCamPosition, firstPersonCamTarget, new Vector3(0f, 1f, 0f));
+                worldMatrix = Matrix.CreateWorld(firstPersonCamTarget, Vector3.Forward, Vector3.Up);
+
+                projectionMatrix = firstPersonProjectionMatrix;
+                viewMatrix = firstPersonViewMatrix;
+
+                // MOUSE INPUT
+                if (mouse.X != screenCentreX)
                 { 
                     player.changeYaw(MathHelper.ToRadians(screenCentreX - mouse.X) / 3);
                 }
@@ -410,22 +498,28 @@ namespace Game1
                 // player move
                 if ((keyboard.IsKeyDown(Keys.Left) || keyboard.IsKeyDown(Keys.A)) && (keyboard.IsKeyUp(Keys.Right) && keyboard.IsKeyUp(Keys.D)))
                 {
-                    player.move(-(new Vector3(2f, 2f, 2f) * new Vector3((float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg - 180)), 0f, (float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)))), activeActors);  
+                    playerDisplacement += -(new Vector3(2f, 2f, 2f) * new Vector3((float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg - 180)), 0f, (float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg))));
+                    //player.move(-(new Vector3(2f, 2f, 2f) * new Vector3((float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg - 180)), 0f, (float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)))), activeActors);  
                 }
                 if ((keyboard.IsKeyDown(Keys.Right) || keyboard.IsKeyDown(Keys.D)) && (keyboard.IsKeyUp(Keys.Left) && keyboard.IsKeyUp(Keys.A)))
                 {
-                    player.move(new Vector3(2f, 2f, 2f) * new Vector3((float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg - 180)), 0f, (float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg))), activeActors);
+                    playerDisplacement += new Vector3(2f, 2f, 2f) * new Vector3((float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg - 180)), 0f, (float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)));
+                    //player.move(new Vector3(2f, 2f, 2f) * new Vector3((float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg - 180)), 0f, (float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg))), activeActors);
                 }
 
                 if ((keyboard.IsKeyDown(Keys.Up) || keyboard.IsKeyDown(Keys.W)) && (keyboard.IsKeyUp(Keys.Down) && keyboard.IsKeyUp(Keys.S))) 
                 {
-                    player.move(new Vector3((float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg))), activeActors);
+                    playerDisplacement += new Vector3((float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg)));
+                    //player.move(new Vector3((float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg))), activeActors);
                 }
 
                 if ((keyboard.IsKeyDown(Keys.Down) || keyboard.IsKeyDown(Keys.S)) && (keyboard.IsKeyUp(Keys.Up) && keyboard.IsKeyUp(Keys.W)))
                 {
-                    player.move(-(new Vector3((float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg)))), activeActors);
+                    playerDisplacement += -(new Vector3((float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg))));
+                    //player.move(-(new Vector3((float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg)))), activeActors);
                 }
+
+                player.move(playerDisplacement, activeActors);
 
                 // choose ammo
 
@@ -443,17 +537,7 @@ namespace Game1
                 }
 
 
-                //set up first person camera
-                firstPersonCamPosition = new Vector3(player.position.X, playerModel.boxSize.Y * 3/5, player.position.Z);
-                firstPersonCamTarget = firstPersonCamPosition + Vector3.Transform(new Vector3(0f, 0f, 1f), player.rotation);
-
-                // set up first person matrices
-                firstPersonProjectionMatrix = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(135), graphics.PreferredBackBufferWidth / graphics.PreferredBackBufferHeight, playerModel.boxExtents.X, 3000f);
-                firstPersonViewMatrix = Matrix.CreateLookAt(firstPersonCamPosition, firstPersonCamTarget, new Vector3(0f, 1f, 0f));
-                worldMatrix = Matrix.CreateWorld(firstPersonCamTarget, Vector3.Forward, Vector3.Up);
-
-                projectionMatrix = firstPersonProjectionMatrix;
-                viewMatrix = firstPersonViewMatrix;
+                
             }
             
             base.Update(gameTime);
@@ -469,6 +553,11 @@ namespace Game1
             foreach (Actor t in terrain)
             {
                 t.draw(viewMatrix, projectionMatrix);
+            }
+
+            foreach(Actor f in floor)
+            {
+                f.draw(viewMatrix, projectionMatrix);
             }
 
             foreach(Actor h in hazards)
@@ -490,8 +579,6 @@ namespace Game1
             {
                 player.draw(viewMatrix, projectionMatrix);
             }
-
-            floor.draw(viewMatrix, projectionMatrix);
 
             // DRAW UI
             spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend);
@@ -555,50 +642,89 @@ namespace Game1
             return newProjectile;
         }
 
-        public void buildTestLevel()
+        public void createLevel(List<string> levelTextRepresentation)
         {
-            createShockGate(new Vector3(500f, 0f, -300f));
-            //createWall(new Vector3(500f, 0f, -125f));
+            float zCoordinate = 0f;
+            foreach(string row in levelTextRepresentation)
+            {
+                for(int i = 0; i < row.Length; i++)
+                {
+                    float xCoordinate = 150f * i;
+                    Vector3 tilePosition = new Vector3(xCoordinate, 0f, zCoordinate);
+                    char tile = row[i];
 
-            guards.Add(new NPC(pawn, new Vector3(-500f, 0f, -500f), pawn.moveSpeed));
-            guards.Add(new NPC(armoured, new Vector3(500f, 0f, -500f), armoured.moveSpeed));
-            guards.Add(new NPC(pawn, new Vector3(-800f, 0f, -500f), pawn.moveSpeed));
+                    if (tile != 'h')
+                    {
+                        floor.Add(new Actor(floorSegmentModel, tilePosition));
+
+                        switch (tile)
+                        {
+                            case 'O':
+                                terrain.Add(new Actor(wall, tilePosition));
+                                break;
+
+                            case 'p':
+                                player.setPosition(tilePosition);
+                                break;
+
+                            case 'g':
+                                guards.Add(new NPC(pawn, tilePosition, pawn.moveSpeed));
+                                break;
+
+                            default:
+                                break;
+                        }
+                    }
+                }
+
+                zCoordinate += 150f;
+            }
         }
 
-        public void buildStandardLevel()
-        {
-            /// Create a blank level with boundary walls and a floor
-            // horizontal terrain creation
-            for (int i = 0; i < graphics.PreferredBackBufferWidth + wall.boxSize.X; i += (int)wall.boxSize.X)
-            {
-                createWall(new Vector3((float)i, 0f, GraphicsDevice.Viewport.Height + wall.boxExtents.Y));
-                createWall(new Vector3((float)i, 0f, -GraphicsDevice.Viewport.Height));
+        //public void buildTestLevel()
+        //{
+        //    createShockGate(new Vector3(500f, 0f, -300f));
+        //    //createWall(new Vector3(500f, 0f, -125f));
 
-                // create terrain in negative direction
-                // ignore if i==0, otherwise 2 objects created in same place
-                if (i != 0)
-                {
-                    createWall(new Vector3((float)-i, 0f, GraphicsDevice.Viewport.Height + wall.boxExtents.Y));
-                    createWall(new Vector3((float)-i, 0f, -GraphicsDevice.Viewport.Height));
-                }
-            }
+        //    guards.Add(new NPC(pawn, new Vector3(-500f, 0f, -500f), pawn.moveSpeed));
+        //    guards.Add(new NPC(armoured, new Vector3(500f, 0f, -500f), armoured.moveSpeed));
+        //    guards.Add(new NPC(pawn, new Vector3(-800f, 0f, -500f), pawn.moveSpeed));
+        //}
 
-            // vertical terrain creation
-            for (int i = 0; i < graphics.PreferredBackBufferHeight + wall.boxSize.X; i += (int)wall.boxSize.X)
-            {
-                createWall(new Vector3(-GraphicsDevice.Viewport.Width, 0f, (float)i), 90);
-                createWall(new Vector3(GraphicsDevice.Viewport.Width, 0f, (float)i), 90);
+        //public void buildStandardLevel()
+        //{
+        //    /// Create a blank level with boundary walls and a floor
+        //    // horizontal terrain creation
+        //    for (int i = 0; i < graphics.PreferredBackBufferWidth + wall.boxSize.X; i += (int)wall.boxSize.X)
+        //    {
+        //        createWall(new Vector3((float)i, 0f, GraphicsDevice.Viewport.Height + wall.boxExtents.Y));
+        //        createWall(new Vector3((float)i, 0f, -GraphicsDevice.Viewport.Height));
 
-                // create terrain in negative direction
-                // ignore if i==0, otherwise 2 objects created in same place
-                if (i != 0)
-                {
-                    createWall(new Vector3(-GraphicsDevice.Viewport.Width, 0f, (float)-i), 90);
-                    createWall(new Vector3(GraphicsDevice.Viewport.Width, 0f, (float)-i), 90);
-                }
-            }
+        //        // create terrain in negative direction
+        //        // ignore if i==0, otherwise 2 objects created in same place
+        //        if (i != 0)
+        //        {
+        //            createWall(new Vector3((float)-i, 0f, GraphicsDevice.Viewport.Height + wall.boxExtents.Y));
+        //            createWall(new Vector3((float)-i, 0f, -GraphicsDevice.Viewport.Height));
+        //        }
+        //    }
 
-            floor = new Actor(floorModel, new Vector3(0f, 0f, 0f));
-        }
+        //    // vertical terrain creation
+        //    for (int i = 0; i < graphics.PreferredBackBufferHeight + wall.boxSize.X; i += (int)wall.boxSize.X)
+        //    {
+        //        createWall(new Vector3(-GraphicsDevice.Viewport.Width, 0f, (float)i), 90);
+        //        createWall(new Vector3(GraphicsDevice.Viewport.Width, 0f, (float)i), 90);
+
+        //        // create terrain in negative direction
+        //        // ignore if i==0, otherwise 2 objects created in same place
+        //        if (i != 0)
+        //        {
+        //            createWall(new Vector3(-GraphicsDevice.Viewport.Width, 0f, (float)-i), 90);
+        //            createWall(new Vector3(GraphicsDevice.Viewport.Width, 0f, (float)-i), 90);
+        //        }
+        //    }
+
+        //    floor = new Actor(floorModel, new Vector3(0f, 0f, 0f));
+        //}
     }
 }

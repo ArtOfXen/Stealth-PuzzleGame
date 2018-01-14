@@ -12,6 +12,7 @@ namespace Game1
     public class Actor
     {
         public BoundingBox collisionHitbox;
+        public BoundingBox underfootHitbox;
 
         public Vector3 position;
         public Matrix rotation;
@@ -36,6 +37,8 @@ namespace Game1
 
             attachedActors = new List<Actor>();
             attachedActors.Add(this);
+
+            updateHitboxes();
         }
 
         public void draw(Matrix viewMatrix, Matrix projectionMatrix)
@@ -78,6 +81,7 @@ namespace Game1
                     a.position.Z + hitboxZ / 2);
 
                 a.collisionHitbox = new BoundingBox(boxMin, boxMax);
+                a.underfootHitbox = new BoundingBox(boxMin - new Vector3(0f, a.modelData.boxExtents.Y / 3, 0f), boxMax);
             }
         }
 
