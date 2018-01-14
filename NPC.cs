@@ -59,11 +59,12 @@ namespace Game1
             // converts Vector3Nullable to Vector3
             Vector3 displacement = changeInPosition ?? default(Vector3);
 
-            if (!dead && !wouldCollideWithTerrain(position + (speed * displacement), movementBlockers))
+            if (!dead && !wouldCollideWithTerrain(position + (speed * displacement), movementBlockers) && !Falling)
             {
                 displace(displacement);
             }
 
+            base.move();
         }
 
         public void changeDirection(bool clockwise)

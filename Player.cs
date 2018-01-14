@@ -20,10 +20,12 @@ namespace Game1
         {
             Vector3 displacement = changeInPosition ?? default(Vector3); // converts Vector3Nullable to Vector3
 
-            if (!wouldCollideWithTerrain(position + (speed * displacement), movementBlockers))
+            if (!wouldCollideWithTerrain(position + (speed * displacement), movementBlockers) && !Falling)
             {
                 displace(displacement);
             }
+
+            base.move();
             
         }
     }

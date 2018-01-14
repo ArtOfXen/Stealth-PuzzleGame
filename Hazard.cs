@@ -8,12 +8,12 @@ using Microsoft.Xna.Framework;
 
 namespace Game1
 {
-    class Hazard : Actor
+    class Hazard : Character
     {
         /// <summary>
-        ///  Actors which kill characters who collide with them
+        ///  Kill player and NPCs who collide with them
         /// </summary>
-        public Hazard(ActorModel actorModel, Vector3 startPosition) : base(actorModel, startPosition)
+        public Hazard(ActorModel actorModel, Vector3 startPosition) : base(actorModel, startPosition, 10)
         {
 
         }

@@ -19,6 +19,7 @@ namespace Game1
         public Character(ActorModel actorModel, Vector3 startPosition, int movementSpeed) : base(actorModel, startPosition)
         {
             speed = new Vector3(movementSpeed, 0f, movementSpeed);
+            Falling = false;
             
         }
 
@@ -52,8 +53,14 @@ namespace Game1
 
         public virtual void move(Vector3? changeInPosition = null, List<Actor> movementBlockers = null)
         {
-
+            if (Falling)
+            {
+                speed = Vector3.Down;
+                displace(new Vector3(0f, 10f, 0f));
+            }
         }
+
+        public bool Falling { get; set; }
 
         //public void move(Direction movementDirection)
         //{
