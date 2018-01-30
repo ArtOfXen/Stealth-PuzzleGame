@@ -11,6 +11,7 @@ namespace Game1
 
     public enum ProjectileClassification
     {
+        none,
         shock, // kills unarmoured enemies
         pull // pulls enemies towards the projectile when action activated
     };
@@ -33,7 +34,7 @@ namespace Game1
             changeYaw(MathHelper.ToRadians(angleOfFire));
         }
 
-        public override void move(Vector3? changeInPosition = null, List<Actor> movementBlockers = null)
+        public override void move(Vector3? changeInPosition = null)
         {
            displace(new Vector3((float)Math.Sin(MathHelper.ToRadians(currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(currentYawAngleDeg))));
         }

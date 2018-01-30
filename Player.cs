@@ -13,14 +13,14 @@ namespace Game1
 
         public Player(ActorModel actorModel, Vector3 startPosition, int movementSpeed) : base(actorModel, startPosition, movementSpeed)
         {
-
+            
         }
 
-        public override void move(Vector3? changeInPosition, List<Actor> movementBlockers)
+        public override void move(Vector3? changeInPosition)
         {
             Vector3 displacement = changeInPosition ?? default(Vector3); // converts Vector3Nullable to Vector3
 
-            if (!wouldCollideWithTerrain(position + (speed * displacement), movementBlockers) && !Falling)
+            if (!wouldCollideWithTerrain(position + (speed * displacement)) && !Falling)
             {
                 displace(displacement);
             }

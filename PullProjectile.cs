@@ -13,8 +13,8 @@ namespace Game1
         
 
         // use DateTime as timer instead of GameTime, since GameTime needs update/draw to function
-        int pullStartSeconds;
-        int currentSeconds;
+        double pullStartSeconds;
+        double currentSeconds;
         float pullAnimationLength;
 
         public PullProjectile(ActorModel projectileModel, Vector3 startPosition, int movementSpeed, float angleOfFire) : 
@@ -23,10 +23,10 @@ namespace Game1
             actionEffectMinimumArea = new BoundingSphere(startPosition, modelData.boxSize.X / 2);
             actionEffectMaximumArea = new BoundingSphere(startPosition, modelData.boxSize.X * 10);
 
-            pullAnimationLength = 1f;
+            pullAnimationLength = 0.5f;
         }
 
-        public override void move(Vector3? changeInPosition = null, List<Actor> movementBlockers = null)
+        public override void move(Vector3? changeInPosition = null)
         {
             if (!actionStarted)
             {
@@ -37,21 +37,12 @@ namespace Game1
             }
             else
             {
-                currentSeconds = DateTime.Now.Second;
+                currentSeconds = DateTime.Now.TimeOfDay.TotalSeconds;
 
-                // if current < start, new minute has started and seconds have reset to 0. So add 60
-                if (currentSeconds < pullStartSeconds)
-                {
-                    currentSeconds += 60;
-                }
-
-                if (currentSeconds >= pullStartSeconds + pullAnimationLength)
+                if (currentSeconds > pullStartSeconds + pullAnimationLength)
                 {
                     requiresDeletion = true;
                 }
-                // check for enemies in max pull area
-                // move them to min pull area
-                
             }
 
         }
@@ -59,7 +50,7 @@ namespace Game1
         public override void startAction()
         {
             base.startAction();
-            pullStartSeconds = DateTime.Now.Second;
+            pullStartSeconds = DateTime.Now.TimeOfDay.TotalSeconds;
         }
 
         

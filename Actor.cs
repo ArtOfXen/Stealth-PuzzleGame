@@ -28,9 +28,9 @@ namespace Game1
         {
             modelData = actorModel;
             position = startPosition;
-            rotationSpeed = 5f;
+            rotationSpeed = 3f;
 
-            currentYawAngleDeg = Game1.down.getAngleDegrees();
+            currentYawAngleDeg = Game1.south.getAngleDegrees();
             currentPitchAngleDeg = 0f;
 
             rotation = Matrix.Identity;
@@ -41,7 +41,7 @@ namespace Game1
             updateHitboxes();
         }
 
-        public void draw(Matrix viewMatrix, Matrix projectionMatrix)
+        public virtual void draw(Matrix viewMatrix, Matrix projectionMatrix)
         {
             updateHitboxes();
 
@@ -91,8 +91,8 @@ namespace Game1
             {
                 a.rotation *= Matrix.CreateFromAxisAngle(Matrix.CreateTranslation(position).Up, angleInRadians);
                 a.currentYawAngleDeg += MathHelper.ToDegrees(angleInRadians);
+                normaliseAngle(ref a.currentYawAngleDeg);
             }
-            normaliseAngle();
             updateHitboxes();
         }
 
@@ -122,28 +122,23 @@ namespace Game1
             }
         }
 
-        public void normaliseAngle()
+        public void normaliseAngle(ref float angle)
         {
             /// sets yaw angle to a degree between -180 and 180
-            if (currentYawAngleDeg > 180)
+            if (angle > 180)
             {
-                while (currentYawAngleDeg > 180)
+                while (angle > 180)
                 {
-                    currentYawAngleDeg -= 360f;
+                    angle -= 360f;
                 }
             }
 
-            else if (currentYawAngleDeg <= -180)
+            else if (angle <= -180)
             {
-                while (currentYawAngleDeg <= -180)
+                while (angle <= -180)
                 {
-                    currentYawAngleDeg += 360f;
+                    angle += 360f;
                 }
-            }
-
-            foreach (Actor a in attachedActors)
-            {
-                a.currentYawAngleDeg = currentYawAngleDeg;
             }
         }
 

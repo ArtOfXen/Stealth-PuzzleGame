@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 
 namespace Game1
 {
@@ -13,27 +14,60 @@ namespace Game1
         /// <summary>
         ///  Kill player and NPCs who collide with them
         /// </summary>
-        public Hazard(ActorModel actorModel, Vector3 startPosition) : base(actorModel, startPosition, 10)
-        {
+        /// 
 
+        public Hazard(ActorModel actorModel, Vector3 startPosition, bool initiallyActive = false) : base(actorModel, startPosition, 10)
+        {
+            Active = initiallyActive;
         }
 
-        public bool checkForHazardCollision(Actor collidingActor)
+        //public bool checkForHazardCollision(Actor collidingActor)
+        //{
+        //    if (!Active)
+        //    {
+        //        return false;
+        //    }
+
+        //    if (collisionHitbox.Intersects(collidingActor.collisionHitbox))
+        //    {
+        //        for (int i = 1; i < attachedActors.Count - 1; i++)
+        //        {
+        //            if (attachedActors[i].collisionHitbox.Intersects(collidingActor.collisionHitbox))
+        //            {
+        //                return false;
+        //            }
+        //        }
+
+        //        return true;
+        //    }
+        //    return false;
+        //}
+
+        public override void draw(Matrix viewMatrix, Matrix projectionMatrix)
         {
-            /// 
-            if (collisionHitbox.Intersects(collidingActor.collisionHitbox))
+            updateHitboxes();
+
+            for(int i = 0; i < attachedActors.Count; i++)
             {
-                for (int i = 1; i < attachedActors.Count - 1; i++)
+                if (i == 0 && !Active)
                 {
-                    if (attachedActors[i].collisionHitbox.Intersects(collidingActor.collisionHitbox))
-                    {
-                        return false;
-                    }
+                    continue;
                 }
-
-                return true;
+                foreach (ModelMesh mesh in attachedActors[i].getModelData().model.Meshes)
+                {
+                    foreach (BasicEffect effect in mesh.Effects)
+                    {
+                        //effect.AmbientLightColor = new Vector3(1f, 0, 0);
+                        effect.EnableDefaultLighting();
+                        effect.View = viewMatrix;
+                        effect.World = attachedActors[i].rotation * Matrix.CreateTranslation(attachedActors[i].position);
+                        effect.Projection = projectionMatrix;
+                    }
+                    mesh.Draw();
+                }
             }
-            return false;
         }
+
+        public bool Active { get; set; }
     }
 }

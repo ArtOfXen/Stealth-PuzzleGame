@@ -1,5 +1,8 @@
-OOOOO
-O  hO
-Op hO
-O  gO
-OOOOO
+O O O O O O O O
+Gr      Gd    O
+            PlO
+              O
+O O O O O O O O
+#
+#Z2;
+~1;2;

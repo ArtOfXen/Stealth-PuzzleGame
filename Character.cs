@@ -15,20 +15,25 @@ namespace Game1
         /// </summary>
         
         protected Vector3 speed;
+        private float velocityDueToGravity;
+        private static List<Actor> movementBlockers;
 
         public Character(ActorModel actorModel, Vector3 startPosition, int movementSpeed) : base(actorModel, startPosition)
         {
             speed = new Vector3(movementSpeed, 0f, movementSpeed);
             Falling = false;
-            
+            velocityDueToGravity = 3f;
+            MovementBlocked = false;
         }
 
-        protected bool wouldCollideWithTerrain(Vector3 newPosition, List<Actor> gameObjects)
+        public bool MovementBlocked { get; set; }
+
+        protected bool wouldCollideWithTerrain(Vector3 newPosition)
         {
             /// checks if potential move will collide with anything
             BoundingBox newPositionBox = new BoundingBox(newPosition - modelData.boxExtents, newPosition + modelData.boxExtents);
 
-            foreach (Actor a in gameObjects)
+            foreach (Actor a in movementBlockers)
             {
                 for (int i = 0; i < a.numberOfAttachedActors(); i++)
                 {
@@ -51,16 +56,22 @@ namespace Game1
             }
         }
 
-        public virtual void move(Vector3? changeInPosition = null, List<Actor> movementBlockers = null)
+        public virtual void move(Vector3? changeInPosition = null)
         {
             if (Falling)
             {
-                speed = Vector3.Down;
-                displace(new Vector3(0f, 10f, 0f));
+                speed = Vector3.Down; // unable to move left or right anymore, only down
+                displace(new Vector3(0f, velocityDueToGravity, 0f));
+                velocityDueToGravity++;
             }
         }
 
         public bool Falling { get; set; }
+
+        public static void setMovementBlockers(List<Actor>newListOfMovementBlockers)
+        {
+            movementBlockers = newListOfMovementBlockers;
+        }
 
         //public void move(Direction movementDirection)
         //{
