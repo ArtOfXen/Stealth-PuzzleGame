@@ -10,8 +10,6 @@ namespace Game1
 {
     class PullProjectile : Projectile
     {
-        
-
         // use DateTime as timer instead of GameTime, since GameTime needs update/draw to function
         double pullStartSeconds;
         double currentSeconds;
@@ -28,14 +26,14 @@ namespace Game1
 
         public override void move(Vector3? changeInPosition = null)
         {
-            if (!actionStarted)
+            if (!actionStarted && !MovementBlocked)
             {
                 displace(new Vector3((float)Math.Sin(MathHelper.ToRadians(currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(currentYawAngleDeg))));
 
                 actionEffectMinimumArea = new BoundingSphere(position, modelData.boxSize.X / 2);
                 actionEffectMaximumArea = new BoundingSphere(position, modelData.boxSize.X * 10);
             }
-            else
+            else if (actionStarted)
             {
                 currentSeconds = DateTime.Now.TimeOfDay.TotalSeconds;
 

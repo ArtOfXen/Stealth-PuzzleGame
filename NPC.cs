@@ -133,9 +133,9 @@ namespace Game1
             }
             else
             {
-
+                executeCurrentInstruction();
             }
-            executeCurrentInstruction();
+            
             if (!chasingPlayer)
             {
                 

@@ -23,7 +23,7 @@ namespace Game1
         protected float rotationSpeed;
 
         protected List<Actor> attachedActors; // child actors
-
+        protected Actor parentActor;
         public Actor(ActorModel actorModel, Vector3 startPosition)
         {
             modelData = actorModel;
@@ -37,6 +37,7 @@ namespace Game1
 
             attachedActors = new List<Actor>();
             attachedActors.Add(this);
+            parentActor = this;
 
             updateHitboxes();
         }
@@ -87,11 +88,30 @@ namespace Game1
 
         public void changeYaw(float angleInRadians)
         {
+            rotation *= Matrix.CreateFromAxisAngle(Matrix.CreateTranslation(parentActor.position).Up, angleInRadians);
+            //a.rotation *= Matrix.CreateRotationY(angleInRadians);
+            currentYawAngleDeg += MathHelper.ToDegrees(angleInRadians);
+            normaliseAngle(ref currentYawAngleDeg);
+
             foreach (Actor a in attachedActors)
             {
-                a.rotation *= Matrix.CreateFromAxisAngle(Matrix.CreateTranslation(position).Up, angleInRadians);
-                a.currentYawAngleDeg += MathHelper.ToDegrees(angleInRadians);
-                normaliseAngle(ref a.currentYawAngleDeg);
+                if (!a.Equals(this))
+                {
+                    Vector3 temp = a.position - position;
+                    temp = Vector3.Transform(temp, Matrix.CreateRotationY(angleInRadians));
+                    a.position = position + temp;
+
+                    a.rotation *= Matrix.CreateFromAxisAngle(Matrix.CreateTranslation(a.parentActor.position).Up, angleInRadians);
+                    //a.rotation *= Matrix.CreateRotationY(angleInRadians);
+                    a.currentYawAngleDeg += MathHelper.ToDegrees(angleInRadians);
+                    normaliseAngle(ref a.currentYawAngleDeg);
+                }
+
+                //if (!a.Equals(this))
+                //{
+                //    Vector3 transform = Vector3.Transform(a.position, a.rotation);
+                //    a.position = (this.position + transform);
+                //}
             }
             updateHitboxes();
         }
@@ -173,11 +193,14 @@ namespace Game1
 
         public void attachNewActor(ActorModel newModel, Vector3 displacementFromParent, float angleInRadians)
         {
-            attachedActors.Add(new Actor(newModel, position + displacementFromParent));
+            Actor newActor = new Actor(newModel, position + displacementFromParent);
+            newActor.parentActor = this;
+            attachedActors.Add(newActor);
         }
 
         public void attachNewActor(Actor newActor)
         {
+            newActor.parentActor = this;
             attachedActors.Add(newActor);
         }
 
@@ -198,6 +221,40 @@ namespace Game1
         public Actor getAttachedActor(int index)
         {
             return attachedActors[index];
+        }
+
+        public Actor getParentActor()
+        {
+            return parentActor;
+        }
+
+        public bool hasNoParentActor()
+        {
+            if (parentActor == this)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        public void detachFromParentActor()
+        {
+            if (!parentActor.Equals(this))
+            {
+                for (int i = 0; i < parentActor.numberOfAttachedActors(); i++)
+                {
+                    if (parentActor.attachedActors[i].Equals(this))
+                    {
+                        parentActor.attachedActors.RemoveAt(i);
+                        break;
+                    }
+                }
+
+                parentActor = this;
+            }
         }
     }
 }

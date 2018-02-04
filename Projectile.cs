@@ -21,7 +21,7 @@ namespace Game1
     {
         ProjectileClassification classification;
         public bool requiresDeletion;
-        public bool actionStarted; // some projectiles have an action activated by right click
+        protected bool actionStarted; // some projectiles have an action activated by right click
 
         protected BoundingSphere actionEffectMaximumArea;
         protected BoundingSphere actionEffectMinimumArea;
@@ -36,7 +36,10 @@ namespace Game1
 
         public override void move(Vector3? changeInPosition = null)
         {
-           displace(new Vector3((float)Math.Sin(MathHelper.ToRadians(currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(currentYawAngleDeg))));
+            if (!MovementBlocked)
+            {
+                displace(new Vector3((float)Math.Sin(MathHelper.ToRadians(currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(currentYawAngleDeg))));
+            }
         }
 
         public ProjectileClassification getClassification()
@@ -46,6 +49,7 @@ namespace Game1
 
         public virtual void startAction()
         {
+            detachFromParentActor();
             actionStarted = true;
         }
 

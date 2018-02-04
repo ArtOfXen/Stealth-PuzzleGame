@@ -10,25 +10,23 @@ using System.IO;
 
 // PRIORITY
 
-// add objective to reach? Or just kill all enemies?
+// check / shrink hitbox sizes
 
-// Locked doors and consoles which unlock them (projectile which opens them)
-
-// timed hazards (turn on and off)
+// one side of shock gate doesn't block movement
 
 // SECONDARY
 // make pull affect hazards instead of enemies, pull hazards into enemies
-// make pull a 'sticky' projectile, which doesn't get destroyed on contact with anything, but attaches to it until right click happens
 // set pull to pull things to tile it is on, instead of its position
 
-// OTHER    
+// NPCs need to find their way back on track after getting pulled away
+    // After move instruction is complete, check coordinates against where it should be in patrol path
+
+// OTHER
 // get enemies to shoot each other - don't know if enemies will shoot yet
 
 // moving platforms (patrol like enemies)
-    // would have to move things on top of them as well
-    // if character.underfootHitbox collides with moving platform, then move character when platform moves
-
-
+// would have to move things on top of them as well
+// if character.underfootHitbox collides with moving platform, then move character when platform moves
 
 
 
@@ -46,6 +44,7 @@ namespace Game1
         // clear fog?
         // drone? overhead camera follows last fired drone projectile
         // power? Turns on electrical hazards or activates consoles
+        // teleport? moves player to projectile's position on right click
     }
 
     public struct EnemyStruct
@@ -107,15 +106,17 @@ namespace Game1
 
         ActorModel cube;
         ActorModel playerModel;
+        ActorModel goalModel;
         ActorModel wall;
         ActorModel electricBeams;
         ActorModel gateWalls;
         ActorModel floorModel;
         ActorModel floorSegmentModel;
+        ActorModel movementTriggerModel;
+        ActorModel projectileTriggerModel;
 
         ProjectileStruct[] projectileTypes;
-        Texture2D gameOverTexture;
-
+       
         int numberOfProjectileTypes;
         ProjectileStruct none;
         ProjectileStruct shock;
@@ -125,6 +126,8 @@ namespace Game1
         EnemyStruct armoured;
 
         Player player;
+        Actor goal;
+
         List<string> level;
         List<string> NPCInstructions;
         List<int> allowedProjectiles; 
@@ -137,11 +140,18 @@ namespace Game1
         List<Projectile> allProjectiles;
         List<NPC> guards;
         List<Hazard> hazards;
+        List<ProjectileActivatedTrigger> projectileActivatedTriggers;
+        List<TimeActivatedTrigger> timeActivatedTriggers;
+        List<MovementActivatedTrigger> movementActivatedTriggers;
 
         ProjectileStruct loadedProjectile;
 
         UI gameOverUI;
-        
+        UI goalFoundUI;
+
+        Texture2D gameOverTexture;
+        Texture2D goalFoundTexture;
+
         struct Bounds
         {
             public float left;
@@ -291,16 +301,16 @@ namespace Game1
             base.Initialize();
 
             player = new Player(playerModel, new Vector3(0f, 0f, 0f), 6);
+            goal = new Actor(goalModel, new Vector3(0f, 0f, 150f));
 
             terrain = new List<Actor>();
-
             floor = new List<Actor>();
-
             guards = new List<NPC>();
-
             hazards = new List<Hazard>();
-
             levelTiles = new List<Tile>();
+            projectileActivatedTriggers = new List<ProjectileActivatedTrigger>();
+            timeActivatedTriggers = new List<TimeActivatedTrigger>();
+            movementActivatedTriggers = new List<MovementActivatedTrigger>();
 
             if (shock.allowedThisLevel)
             {
@@ -327,6 +337,7 @@ namespace Game1
             projectileTypes[1] = pull;
 
             gameOverUI = new UI(gameOverTexture, new Vector2(screenCentreX, screenCentreY), 2f, false);
+            goalFoundUI = new UI(goalFoundTexture, new Vector2(screenCentreX, screenCentreY), 2f, false);
 
             gunLoaded = true;
             loadedProjectile = none;
@@ -367,12 +378,15 @@ namespace Game1
 
             ActorModel.setWorldMatrix(worldMatrix);
 
-            //cube = new ActorType(Content.Load<Model>("Cube"));
+            cube = new ActorModel(Content.Load<Model>("Cube"), true, true);
             playerModel = new ActorModel(Content.Load<Model>("PlayerTemp"), false, false);
+            goalModel = new ActorModel(Content.Load<Model>("Goal"), false, false);
             wall = new ActorModel(Content.Load<Model>("WallSegment"), true, true);
             gateWalls = new ActorModel(Content.Load<Model>("ElectricGateWall"), true, true);
             floorModel = new ActorModel(Content.Load<Model>("Floor"), false, false);
             floorSegmentModel = new ActorModel(Content.Load<Model>("FloorSegment"), false, false);
+            movementTriggerModel = new ActorModel(Content.Load<Model>("FloorTrigger"), false, false);
+            projectileTriggerModel = new ActorModel(Content.Load<Model>("ProjectileTrigger"), true, true);
 
             electricBeams = new ActorModel(Content.Load<Model>("ElectricGateBeams"), false, false);
 
@@ -392,6 +406,7 @@ namespace Game1
             pull.unselectedUI = Content.Load<Texture2D>("UIPullUnselected");
             pull.unavailableUI = Content.Load<Texture2D>("UIPullUnavailable");
             gameOverTexture = Content.Load<Texture2D>("UIGameOver");
+            goalFoundTexture = Content.Load<Texture2D>("UIGoal");
         }
 
         protected override void UnloadContent()
@@ -433,11 +448,16 @@ namespace Game1
 
             onFloor = false;
 
+            if (player.collisionHitbox.Intersects(goal.collisionHitbox))
+            {
+                goalFoundUI.setActive(true);
+            }
+
             player.updateHitboxes();
             foreach (Hazard h in hazards)
             {
                 // hazard / player collision
-                if (h.collisionHitbox.Intersects(player.collisionHitbox) && h.Active)
+                if (h.collisionHitbox.Intersects(player.collisionHitbox) && h.isActive())
                 {
                     gameOverUI.setActive(true);
                 }
@@ -517,7 +537,7 @@ namespace Game1
                     // kill guards who collide with hazards
                     foreach(Hazard h in hazards)
                     {
-                        if (h.collisionHitbox.Intersects(g.collisionHitbox) && h.Active)
+                        if (h.collisionHitbox.Intersects(g.collisionHitbox) && h.isActive())
                         {
                             g.kill();
                         }
@@ -533,11 +553,6 @@ namespace Game1
                 pj.move();
                 pj.updateHitboxes();
 
-                if (pj.requiresDeletion)
-                {
-                    destroyProjectile = true;
-                }
-
                 // projectile / guard collision
                 foreach (NPC g in guards)
                 {
@@ -548,6 +563,16 @@ namespace Game1
                             g.kill();
                             destroyProjectile = true;
                         }
+
+                        if (pj.getClassification() == ProjectileClassification.pull && !pj.hasActionStarted())
+                        {
+                            if (pj.hasNoParentActor())
+                            {
+                                g.attachNewActor(pj);
+                            }
+                            pj.MovementBlocked = true;
+                        }
+
                         break;
                     }
 
@@ -562,12 +587,39 @@ namespace Game1
                     }
                 }
 
+                foreach(ProjectileActivatedTrigger pat in projectileActivatedTriggers)
+                {
+                    if (pj.collisionHitbox.Intersects(pat.collisionHitbox))
+                    {
+                        pat.hitByProjectile(pj.getClassification());
+                        destroyProjectile = true;
+                    }
+                }
+                
+                if (pj.requiresDeletion)
+                {
+                    destroyProjectile = true;
+                }
+
                 // projectile / terrain collision
                 foreach (Actor t in terrain)
                 {
                     if (pj.collisionHitbox.Intersects(t.collisionHitbox))
                     {
-                        destroyProjectile = true;
+                        if (pj.getClassification() == ProjectileClassification.pull && !pj.hasActionStarted())
+                        {
+                            if (pj.hasNoParentActor())
+                            {
+                                t.attachNewActor(pj);
+                            }
+                            pj.MovementBlocked = true;
+                        }
+
+                        else
+                        {
+                            destroyProjectile = true;
+                        }
+
                         break;
                     }
                 }
@@ -580,6 +632,43 @@ namespace Game1
             // replace list of projectiles with list of projectiles that didn't collide with anything
             allProjectiles.Clear();
             allProjectiles = activeProjectiles;
+
+            // check triggers
+            foreach (TimeActivatedTrigger tat in timeActivatedTriggers)
+            {
+                tat.checkTimer();
+            }
+
+            foreach(MovementActivatedTrigger mat in movementActivatedTriggers)
+            {
+                mat.checkCurrentlyCollidingCharacter();
+
+                if (mat.collisionHitbox.Intersects(player.collisionHitbox))
+                {
+                    mat.collisionWithCharacter(player);
+                }
+
+                foreach(NPC g in guards)
+                {
+                    if (mat.collisionHitbox.Intersects(g.collisionHitbox))
+                    {
+                        mat.collisionWithCharacter(g);
+                    }
+                }
+            }
+
+
+            // projectile action button
+            if (mouse.RightButton == ButtonState.Pressed)
+            {
+                foreach (Projectile p in allProjectiles)
+                {
+                    if (!p.Equals(none))
+                    {
+                        p.startAction();
+                    }
+                }
+            }
 
 
             // STRATEGIC VIEW
@@ -638,18 +727,6 @@ namespace Game1
                 if (mouse.LeftButton == ButtonState.Released && !gunLoaded && !loadedProjectile.Equals(none))
                 {
                     gunLoaded = true;
-                }
-
-                // action button
-                if (mouse.RightButton == ButtonState.Pressed)
-                {
-                    foreach (Projectile p in allProjectiles)
-                    {
-                        if (!p.Equals(none))
-                        {
-                            p.startAction();
-                        }
-                    }
                 }
 
                 // KEYBOARD INPUT
@@ -742,10 +819,28 @@ namespace Game1
                 g.draw(viewMatrix, projectionMatrix);
             }
 
+            foreach(ProjectileActivatedTrigger pat in projectileActivatedTriggers)
+            {
+                pat.draw(viewMatrix, projectionMatrix);
+            }
+
+            foreach(TimeActivatedTrigger tat in timeActivatedTriggers)
+            {
+                tat.draw(viewMatrix, projectionMatrix);
+            }
+
+            foreach(MovementActivatedTrigger mat in movementActivatedTriggers)
+            {
+                mat.draw(viewMatrix, projectionMatrix);
+            }
+
             if (Keyboard.GetState().IsKeyDown(Keys.Tab))
             {
                 player.draw(viewMatrix, projectionMatrix);
             }
+
+            goal.draw(viewMatrix, projectionMatrix);
+
 
             // DRAW UI
             spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend);
@@ -754,11 +849,12 @@ namespace Game1
             {
                 projectileTypes[i].ui.draw(spriteBatch);
             }
+
             gameOverUI.draw(spriteBatch);
+            goalFoundUI.draw(spriteBatch);
 
             spriteBatch.End();
 
-            
 
             base.Draw(gameTime);
         }
@@ -843,8 +939,16 @@ namespace Game1
 
         public void createShockGate(Vector3 position, bool initiallyActive, float rotation = 0)
         {
-            Hazard newShockGate = new Hazard(electricBeams, position, initiallyActive);
-            
+            Hazard newShockGate = new Hazard(electricBeams, position, null, initiallyActive);
+
+            //ProjectileActivatedTrigger pat = new ProjectileActivatedTrigger(projectileTriggerModel, position - new Vector3(150f, -100f, 0f), newShockGate, true, ProjectileClassification.shock);
+            //projectileActivatedTriggers.Add(pat);
+
+            //TimeActivatedTrigger tat = new TimeActivatedTrigger(cube, position - new Vector3(150f, -100f, 0f), newShockGate, true, 2);
+            //timeActivatedTriggers.Add(tat);
+
+            MovementActivatedTrigger mat = new MovementActivatedTrigger(movementTriggerModel, position - new Vector3(0f, 0f, -150f), newShockGate, true);
+            movementActivatedTriggers.Add(mat);
 
             // left wall
             newShockGate.attachNewActor(gateWalls, new Vector3(-newShockGate.getModelData().boxExtents.X * (float)Math.Cos(MathHelper.ToRadians(rotation)), 0f, -newShockGate.getModelData().boxExtents.X * (float)Math.Sin(MathHelper.ToRadians(rotation))), 0f);
@@ -949,6 +1053,10 @@ namespace Game1
                             case 'G':
                                 guards.Add(new NPC(pawn, newTile, pawn.moveSpeed));
                                 guards[guards.Count - 1].changeYaw(MathHelper.ToRadians(initialAngle));
+                                break;
+
+                            case 'E':
+                                goal.setPosition(tilePosition);
                                 break;
 
                             default:

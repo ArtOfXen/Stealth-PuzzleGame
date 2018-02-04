@@ -1,8 +1,8 @@
 O O O O O O O O
-Gr      Gd    O
-            PlO
-              O
+          H   O
+    E         O
+        Pu    O
 O O O O O O O O
-#
+#T90;W1;
 #Z2;
 ~1;2;
