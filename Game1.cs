@@ -11,19 +11,24 @@ using System.IO;
 // PRIORITY
 
 // check / shrink hitbox sizes
+    // fixed, needs testing
 
-// one side of shock gate doesn't block movement
+// add interval/reset timer code to trigger class
+    // needs testing
+
+// redo levelfile format. Just do terrain in main part, then a list of Guards/hazards, their starting coords, direction, then patrol path / timers
 
 // SECONDARY
-// make pull affect hazards instead of enemies, pull hazards into enemies
+// make pull affect other projectiles? Pull the power projectile to a trigger which is around a corner?
 // set pull to pull things to tile it is on, instead of its position
+    // pulls things on same row/column as it only
+    // change model to demonstrate better
 
 // NPCs need to find their way back on track after getting pulled away
     // After move instruction is complete, check coordinates against where it should be in patrol path
+// Projectile firing hazard (wall darts)
 
 // OTHER
-// get enemies to shoot each other - don't know if enemies will shoot yet
-
 // moving platforms (patrol like enemies)
 // would have to move things on top of them as well
 // if character.underfootHitbox collides with moving platform, then move character when platform moves
@@ -40,7 +45,6 @@ namespace Game1
         public bool shock;
         public bool pull;
         // swap? swaps two actors around
-        // move? use on wheeled hazard to cause it to move forward until it hits a wall or gap in floor
         // clear fog?
         // drone? overhead camera follows last fired drone projectile
         // power? Turns on electrical hazards or activates consoles
@@ -448,6 +452,7 @@ namespace Game1
 
             onFloor = false;
 
+            // player / end goal collision
             if (player.collisionHitbox.Intersects(goal.collisionHitbox))
             {
                 goalFoundUI.setActive(true);
@@ -523,7 +528,7 @@ namespace Game1
                                  * 
                                  * 
                                  * 
-                                 * make enemy run towards player
+                                 * npc reaction to seeing player
                                  * 
                                  * 
                                  * 
@@ -587,20 +592,6 @@ namespace Game1
                     }
                 }
 
-                foreach(ProjectileActivatedTrigger pat in projectileActivatedTriggers)
-                {
-                    if (pj.collisionHitbox.Intersects(pat.collisionHitbox))
-                    {
-                        pat.hitByProjectile(pj.getClassification());
-                        destroyProjectile = true;
-                    }
-                }
-                
-                if (pj.requiresDeletion)
-                {
-                    destroyProjectile = true;
-                }
-
                 // projectile / terrain collision
                 foreach (Actor t in terrain)
                 {
@@ -623,6 +614,20 @@ namespace Game1
                         break;
                     }
                 }
+
+                foreach (ProjectileActivatedTrigger pat in projectileActivatedTriggers)
+                {
+                    if (pj.collisionHitbox.Intersects(pat.collisionHitbox))
+                    {
+                        pat.hitByProjectile(pj.getClassification());
+                        destroyProjectile = true;
+                    }
+                }
+                
+                if (pj.requiresDeletion)
+                {
+                    destroyProjectile = true;
+                }                
 
                 // list of projectiles that don't need destroying
                 if (destroyProjectile == false)
@@ -940,6 +945,7 @@ namespace Game1
         public void createShockGate(Vector3 position, bool initiallyActive, float rotation = 0)
         {
             Hazard newShockGate = new Hazard(electricBeams, position, null, initiallyActive);
+            newShockGate.changeYaw(MathHelper.ToRadians(rotation));
 
             //ProjectileActivatedTrigger pat = new ProjectileActivatedTrigger(projectileTriggerModel, position - new Vector3(150f, -100f, 0f), newShockGate, true, ProjectileClassification.shock);
             //projectileActivatedTriggers.Add(pat);
@@ -951,14 +957,13 @@ namespace Game1
             movementActivatedTriggers.Add(mat);
 
             // left wall
-            newShockGate.attachNewActor(gateWalls, new Vector3(-newShockGate.getModelData().boxExtents.X * (float)Math.Cos(MathHelper.ToRadians(rotation)), 0f, -newShockGate.getModelData().boxExtents.X * (float)Math.Sin(MathHelper.ToRadians(rotation))), 0f);
+            newShockGate.attachNewActor(gateWalls, new Vector3(-newShockGate.getModelData().boxExtents.X * (float)Math.Cos(MathHelper.ToRadians(rotation)), 0f, -newShockGate.getModelData().boxExtents.X * (float)Math.Sin(MathHelper.ToRadians(rotation))), MathHelper.ToRadians(rotation));
             // right wall
-            newShockGate.attachNewActor(gateWalls, new Vector3(newShockGate.getModelData().boxExtents.X * (float)Math.Cos(MathHelper.ToRadians(rotation)), 0f, newShockGate.getModelData().boxExtents.X * (float)Math.Sin(MathHelper.ToRadians(rotation))), 0f);
+            newShockGate.attachNewActor(gateWalls, new Vector3(newShockGate.getModelData().boxExtents.X * (float)Math.Cos(MathHelper.ToRadians(rotation)), 0f, newShockGate.getModelData().boxExtents.X * (float)Math.Sin(MathHelper.ToRadians(rotation))), MathHelper.ToRadians(rotation));
 
-            newShockGate.changeYaw(MathHelper.ToRadians(rotation));
             hazards.Add(newShockGate);
 
-            for(int i = 1; i <newShockGate.numberOfAttachedActors() - 1; i++)
+            for(int i = 1; i <newShockGate.numberOfAttachedActors(); i++)
             {
                 newShockGate.getAttachedActor(i).getModelData().resizeHitbox(new Vector3(0.5f, 1f, 1f)); // shrink attached walls, otherwise they interfere with shock gate collision detection
                 terrain.Add(newShockGate.getAttachedActor(i));
@@ -1051,8 +1056,7 @@ namespace Game1
                                 break;
 
                             case 'G':
-                                guards.Add(new NPC(pawn, newTile, pawn.moveSpeed));
-                                guards[guards.Count - 1].changeYaw(MathHelper.ToRadians(initialAngle));
+                                guards.Add(new NPC(pawn, newTile, pawn.moveSpeed, initialAngle));
                                 break;
 
                             case 'E':

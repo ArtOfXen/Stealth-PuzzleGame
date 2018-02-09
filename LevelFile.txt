@@ -1,8 +1,6 @@
 O O O O O O O O
-          H   O
-    E         O
-        Pu    O
+    Gl    Hr  O
+    Gu        O
+E       Pu    O
 O O O O O O O O
-#T90;W1;
-#Z2;
 ~1;2;

@@ -68,8 +68,43 @@ namespace Game1
             foreach (Actor a in attachedActors)
             {
                 // calculate new hitbox size
-                float hitboxX = ((float)Math.Abs(Math.Cos(MathHelper.ToRadians(a.currentYawAngleDeg))) * a.modelData.boxSize.X) + ((float)Math.Abs(Math.Sin(MathHelper.ToRadians(a.currentYawAngleDeg))) * a.modelData.boxSize.Z);
-                float hitboxZ = ((float)Math.Abs(Math.Cos(MathHelper.ToRadians(a.currentYawAngleDeg))) * a.modelData.boxSize.Z) + ((float)Math.Abs(Math.Sin(MathHelper.ToRadians(a.currentYawAngleDeg))) * a.modelData.boxSize.X);
+
+               
+                float hitboxX;
+                float hitboxZ;
+                float minimumHitboxSize;
+                float differenceBetweenMinMax;
+                float factorOfDifferenceToAddX;
+                float factorOfDifferenceToAddZ;
+
+                // find the lowest out of the X and Z coordinates of the hitbox, and then the difference between them
+                if (a.modelData.boxSize.X <= a.modelData.boxSize.Z)
+                {
+                    minimumHitboxSize = a.modelData.boxSize.X;
+                    differenceBetweenMinMax = a.modelData.boxSize.Z - a.modelData.boxSize.X;
+                }
+                else
+                {
+                    minimumHitboxSize = a.modelData.boxSize.Z;
+                    differenceBetweenMinMax = a.modelData.boxSize.X - a.modelData.boxSize.Z;
+                }
+
+                // calculate how big the hitbox should be in each direction by adding a factor of the difference in size between the max and min size
+                // size needs to change as actor rotates
+                factorOfDifferenceToAddZ = Math.Abs(currentYawAngleDeg % 180) / 90;
+                if (factorOfDifferenceToAddZ > 1)
+                {
+                    factorOfDifferenceToAddZ = 1 - (factorOfDifferenceToAddZ - 1);
+                }
+
+                factorOfDifferenceToAddX = 1 - factorOfDifferenceToAddZ;
+
+                hitboxX = minimumHitboxSize + (factorOfDifferenceToAddX * differenceBetweenMinMax);
+                hitboxZ = minimumHitboxSize + (factorOfDifferenceToAddZ * differenceBetweenMinMax);
+
+                //float hitboxX = ((float)Math.Abs(Math.Cos(MathHelper.ToRadians(a.currentYawAngleDeg))) * a.modelData.boxSize.X) + ((float)Math.Abs(Math.Sin(MathHelper.ToRadians(a.currentYawAngleDeg))) * a.modelData.boxSize.Z);
+                //float hitboxZ = ((float)Math.Abs(Math.Cos(MathHelper.ToRadians(a.currentYawAngleDeg))) * a.modelData.boxSize.Z) + ((float)Math.Abs(Math.Sin(MathHelper.ToRadians(a.currentYawAngleDeg))) * a.modelData.boxSize.X);
+
 
                 // calculate hitbox positions
                 Vector3 boxMin = new Vector3(
@@ -102,7 +137,6 @@ namespace Game1
                     a.position = position + temp;
 
                     a.rotation *= Matrix.CreateFromAxisAngle(Matrix.CreateTranslation(a.parentActor.position).Up, angleInRadians);
-                    //a.rotation *= Matrix.CreateRotationY(angleInRadians);
                     a.currentYawAngleDeg += MathHelper.ToDegrees(angleInRadians);
                     normaliseAngle(ref a.currentYawAngleDeg);
                 }
@@ -194,6 +228,7 @@ namespace Game1
         public void attachNewActor(ActorModel newModel, Vector3 displacementFromParent, float angleInRadians)
         {
             Actor newActor = new Actor(newModel, position + displacementFromParent);
+            newActor.changeYaw(angleInRadians);
             newActor.parentActor = this;
             attachedActors.Add(newActor);
         }

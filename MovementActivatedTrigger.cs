@@ -12,7 +12,7 @@ namespace Game1
 
         private Character currentlyCollidingCharacter;
 
-        public MovementActivatedTrigger(ActorModel actorModel, Vector3 startPosition, VariableObstacle newLinkedObstacle, bool canBeActivatedMultipleTimes) : base(actorModel, startPosition, newLinkedObstacle, canBeActivatedMultipleTimes)
+        public MovementActivatedTrigger(ActorModel actorModel, Vector3 startPosition, VariableObstacle newLinkedObstacle, bool canBeActivatedMultipleTimes, int? automaticIntervalTimer = null, int? automaticResetTimer = null) : base(actorModel, startPosition, newLinkedObstacle, canBeActivatedMultipleTimes, automaticIntervalTimer, automaticResetTimer)
         {
             currentlyCollidingCharacter = null;
         }
