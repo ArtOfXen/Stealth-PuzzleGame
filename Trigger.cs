@@ -16,59 +16,76 @@ namespace Game1
 
         VariableObstacle linkedObstacle;
         bool reactivatable;
-        bool activated;
+        bool hasBeenActivated;
+        bool initiallyActive;
+        bool currentlyActive;
         double? intervalTimer;
-        double? resetTimer;
+        protected double? resetTimer;
         double lastIntervalTime;
-        double activationTime;
+        protected double activationTime;
 
 
-        protected Trigger(ActorModel actorModel, Vector3 startPosition, VariableObstacle newLinkedObstacle, bool canBeActivatedMultipleTimes, int? automaticIntervalTimer = null, int? automaticResetTimer = null) : base(actorModel, startPosition)
+        protected Trigger(ActorModel actorModel, Vector3 startPosition, VariableObstacle newLinkedObstacle, bool canBeActivatedMultipleTimes, double? automaticIntervalTimer = null, double? automaticResetTimer = null) : base(actorModel, startPosition)
         {
-            activated = false;
+            hasBeenActivated = false;
             linkedObstacle = newLinkedObstacle;
             reactivatable = canBeActivatedMultipleTimes;
             intervalTimer = automaticIntervalTimer;
             resetTimer = automaticResetTimer;
             lastIntervalTime = DateTime.Now.TimeOfDay.TotalSeconds;
+            currentlyActive = linkedObstacle.isActive();
+            initiallyActive = currentlyActive;
         }
 
-        public void update()
+        //public virtual void update()
+        //{
+        //    double currentTime = DateTime.Now.TimeOfDay.TotalSeconds;
+
+        //    if (intervalTimer != null)
+        //    {
+        //        if (currentTime > lastIntervalTime + intervalTimer)
+        //        {
+        //            lastIntervalTime = currentTime;
+        //            activateTrigger(true);
+        //        }
+
+        //        if (resetTimer != null)
+        //        {
+        //            if (activated && (currentTime > activationTime + resetTimer))
+        //            {
+        //                activateTrigger(true);
+        //                activated = false;
+        //            }
+        //        }
+        //    }
+        //}
+        public void checkResetTimer()
         {
             double currentTime = DateTime.Now.TimeOfDay.TotalSeconds;
 
-            if (intervalTimer != null)
+            if (resetTimer != null)
             {
-                if (currentTime > lastIntervalTime + intervalTimer)
+                if (currentTime > activationTime + resetTimer && currentlyActive != initiallyActive)
                 {
-                    lastIntervalTime = currentTime;
                     activateTrigger(true);
-                }
-
-                if (resetTimer != null)
-                {
-                    if (activated && (currentTime > activationTime + resetTimer))
-                    {
-                        activateTrigger(true);
-                        activated = false;
-                    }
                 }
             }
         }
 
         protected void activateTrigger(bool overwriteConditionalCheck = false)
         {
-            if (activated == false && !reactivatable) // check that trigger can still be activated
+            if (canBeActivated() || overwriteConditionalCheck) // check that trigger can still be activated
             {
-                activated = true;
+                hasBeenActivated = true;
                 linkedObstacle.changeActiveStatus();
+                currentlyActive = linkedObstacle.isActive();
                 activationTime = DateTime.Now.TimeOfDay.TotalSeconds;
             }
         }
 
         protected bool canBeActivated()
         {
-            if (!activated || reactivatable)
+            if (!hasBeenActivated || reactivatable)
             {
                 return true;
             }

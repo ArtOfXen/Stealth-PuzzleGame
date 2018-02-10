@@ -10,13 +10,14 @@ using System.IO;
 
 // PRIORITY
 
+// trigger reset timers
+    // test
+
 // check / shrink hitbox sizes
     // fixed, needs testing
 
 // add interval/reset timer code to trigger class
     // needs testing
-
-// redo levelfile format. Just do terrain in main part, then a list of Guards/hazards, their starting coords, direction, then patrol path / timers
 
 // SECONDARY
 // make pull affect other projectiles? Pull the power projectile to a trigger which is around a corner?
@@ -132,7 +133,8 @@ namespace Game1
         Player player;
         Actor goal;
 
-        List<string> level;
+        List<string> levelLayout;
+        List<string> levelActors;
         List<string> NPCInstructions;
         List<int> allowedProjectiles; 
 
@@ -229,7 +231,8 @@ namespace Game1
             pull.moveSpeed = 12;
             pull.allowedThisLevel = false;
             
-            level = new List<string>();
+            levelLayout = new List<string>();
+            levelActors = new List<string>();
             NPCInstructions = new List<string>();
             allowedProjectiles = new List<int>();
 
@@ -243,8 +246,9 @@ namespace Game1
                         if (line[0] == '#')
                         {
                             // remove # sign
-                            string instructionLine = line.Remove(0, 1);
-                            NPCInstructions.Add(instructionLine);
+                            string levelActor = line.Remove(0, 1);
+                            levelActors.Add(levelActor);
+                            //NPCInstructions.Add(instructionLine);
                         }
                         else if (line[0] == '~')
                         {
@@ -284,7 +288,7 @@ namespace Game1
                         }
                         else
                         {
-                            level.Add(line);
+                            levelLayout.Add(line);
                         }
                     }
                 }
@@ -353,24 +357,24 @@ namespace Game1
             levelBounds.left = -GraphicsDevice.Viewport.Width + wall.boxSize.X;
             levelBounds.right = GraphicsDevice.Viewport.Height - wall.boxSize.X;
 
-            createLevel(level);
+            createLevel(levelLayout, levelActors);
 
             // if less instructions than guards, add instructions to stand still
-            while (NPCInstructions.Count < guards.Count)
-            {
-                NPCInstructions.Add("W10;");
-            }
+            //while (NPCInstructions.Count < guards.Count)
+            //{
+            //    NPCInstructions.Add("W10;");
+            //}
 
-            // add instructions to guards
-            for (int i = 0; i < guards.Count; i++)
-            {
-                if (NPCInstructions[i] == "")
-                {
-                    NPCInstructions[i] = "W10;";
-                }
-                updateNPCInstructions(guards[i], NPCInstructions[i]);
+            //// add instructions to guards
+            //for (int i = 0; i < guards.Count; i++)
+            //{
+            //    if (NPCInstructions[i] == "")
+            //    {
+            //        NPCInstructions[i] = "W10;";
+            //    }
+            //    updateNPCInstructions(guards[i], NPCInstructions[i]);
                 
-            }
+            //}
             // send terrain data to characters
             Character.setMovementBlockers(terrain);
         }
@@ -442,9 +446,9 @@ namespace Game1
             {
                 enemyVisionBlockers.Add(n);
             }
-            foreach(Actor h in hazards)
+            foreach(Hazard h in hazards)
             {
-                h.updateHitboxes();
+                h.update();
                 enemyVisionBlockers.Add(h);
             }
 
@@ -639,14 +643,11 @@ namespace Game1
             allProjectiles = activeProjectiles;
 
             // check triggers
-            foreach (TimeActivatedTrigger tat in timeActivatedTriggers)
-            {
-                tat.checkTimer();
-            }
 
             foreach(MovementActivatedTrigger mat in movementActivatedTriggers)
             {
                 mat.checkCurrentlyCollidingCharacter();
+                mat.checkResetTimer();
 
                 if (mat.collisionHitbox.Intersects(player.collisionHitbox))
                 {
@@ -660,6 +661,11 @@ namespace Game1
                         mat.collisionWithCharacter(g);
                     }
                 }
+            }
+
+            foreach (ProjectileActivatedTrigger pat in projectileActivatedTriggers)
+            {
+                pat.checkResetTimer();
             }
 
 
@@ -872,16 +878,21 @@ namespace Game1
             List<Tile> npcPatrolPath = new List<Tile>();
             Vector2 lastTileCoordinates = npc.currentTile.coordinates;
 
+            if (instructionList[instructionList.Length - 1] != ',')
+            {
+                instructionList += ",";
+            }
+
             for (int i = 0; i < instructionList.Length; i++)
             {
                 char c = instructionList[i];
-                if (c == ';')
+                if (c == ',')
                 {
                     numOfInstructions++;
                 }
             }
 
-            individualInstructions = instructionList.Split(';');
+            individualInstructions = instructionList.Split(',');
 
             for (int i = 0; i < numOfInstructions; i++)
             {
@@ -942,19 +953,10 @@ namespace Game1
         //    terrain.Add(newWall);
         //}
 
-        public void createShockGate(Vector3 position, bool initiallyActive, float rotation = 0)
+        public void createShockGate(Vector3 position, bool initiallyActive, double? intervalTimer = null, float rotation = 0)
         {
-            Hazard newShockGate = new Hazard(electricBeams, position, null, initiallyActive);
+            Hazard newShockGate = new Hazard(electricBeams, position, initiallyActive, intervalTimer);
             newShockGate.changeYaw(MathHelper.ToRadians(rotation));
-
-            //ProjectileActivatedTrigger pat = new ProjectileActivatedTrigger(projectileTriggerModel, position - new Vector3(150f, -100f, 0f), newShockGate, true, ProjectileClassification.shock);
-            //projectileActivatedTriggers.Add(pat);
-
-            //TimeActivatedTrigger tat = new TimeActivatedTrigger(cube, position - new Vector3(150f, -100f, 0f), newShockGate, true, 2);
-            //timeActivatedTriggers.Add(tat);
-
-            MovementActivatedTrigger mat = new MovementActivatedTrigger(movementTriggerModel, position - new Vector3(0f, 0f, -150f), newShockGate, true);
-            movementActivatedTriggers.Add(mat);
 
             // left wall
             newShockGate.attachNewActor(gateWalls, new Vector3(-newShockGate.getModelData().boxExtents.X * (float)Math.Cos(MathHelper.ToRadians(rotation)), 0f, -newShockGate.getModelData().boxExtents.X * (float)Math.Sin(MathHelper.ToRadians(rotation))), MathHelper.ToRadians(rotation));
@@ -991,46 +993,31 @@ namespace Game1
             return newProjectile;
         }
 
-        public void createLevel(List<string> levelTextRepresentation)
+        public void createLevel(List<string> levelTextRepresentation, List<string> levelActorsTextRepresentation)
         {
             Tile newTile;
             float zPosition = 0f;
 
             for (int i = 0; i < levelTextRepresentation.Count; i++)
             {
-                if (levelTextRepresentation[i].Length % 2 != 0)
-                {
-                    levelTextRepresentation[i] += " ";
-                }
+                //if (levelTextRepresentation[i].Length % 2 != 0)
+                //{
+                //    levelTextRepresentation[i] += " ";
+                //}
 
-                for (int j = 0; j < levelTextRepresentation[i].Length; j+=2)
+                for (int j = 0; j < levelTextRepresentation[i].Length; j++)
                 {
-                    float xPosition = (float)(tileSize * Math.Ceiling((double)(j / 2)));
+                    float xPosition = (float)(tileSize * j);
                     Vector3 tilePosition = new Vector3(xPosition, 0f, zPosition);
                     char tileContents = levelTextRepresentation[i][j];
-                    char initialDirection = levelTextRepresentation[i][j + 1];
-                    float initialAngle;
+                    //char initialDirection = levelTextRepresentation[i][j + 1];
+                    //float initialAngle;
 
-                    newTile.coordinates.X = (float)Math.Ceiling((double)(j / 2));
+                    newTile.coordinates.X = j;
                     newTile.coordinates.Y = zPosition / tileSize;
                     newTile.centre = new Vector3(xPosition, 0f, zPosition);
 
-                    switch(initialDirection)
-                    {
-                        case 'u':
-                            initialAngle = 180;
-                            break;
-                        case 'l':
-                            initialAngle = -90;
-                            break;
-                        case 'r':
-                            initialAngle = 90;
-                            break;
-                        default:
-                            //also case 'd'
-                            initialAngle = 0;
-                            break;
-                    }
+                    
 
                     if (tileContents != 'x') // x = hole in floor
                     {
@@ -1042,22 +1029,22 @@ namespace Game1
                                 terrain.Add(new Actor(wall, tilePosition));
                                 break;
 
-                            case 'H':
-                                createShockGate(tilePosition, true, initialAngle);
-                                break;
+                            //case 'H':
+                            //    createShockGate(tilePosition, true, initialAngle);
+                            //    break;
 
-                            case 'h':
-                                createShockGate(tilePosition, false, initialAngle);
-                                break;
+                            //case 'h':
+                            //    createShockGate(tilePosition, false, initialAngle);
+                            //    break;
 
-                            case 'P':
-                                player.setPosition(tilePosition);
-                                player.changeYaw(MathHelper.ToRadians(initialAngle));
-                                break;
+                            //case 'P':
+                            //    player.setPosition(tilePosition);
+                            //    player.changeYaw(MathHelper.ToRadians(initialAngle));
+                            //    break;
 
-                            case 'G':
-                                guards.Add(new NPC(pawn, newTile, pawn.moveSpeed, initialAngle));
-                                break;
+                            //case 'G':
+                            //    guards.Add(new NPC(pawn, newTile, pawn.moveSpeed, initialAngle));
+                            //    break;
 
                             case 'E':
                                 goal.setPosition(tilePosition);
@@ -1073,6 +1060,153 @@ namespace Game1
 
                 zPosition += tileSize;
             }
+
+            for (int i = 0; i < levelActorsTextRepresentation.Count; i++)
+            {
+                string[] splitLine;
+                Vector2 actorCoordinates;
+                string[] actorCoordinatesString;
+                char initialDirection;
+                float initialAngle;
+                Tile actorStartingTile = levelTiles[0];
+
+                splitLine = levelActorsTextRepresentation[i].Split(';');
+
+                actorCoordinatesString = splitLine[1].Split(',');
+                actorCoordinates = new Vector2(Int32.Parse(actorCoordinatesString[0]), Int32.Parse(actorCoordinatesString[1]));
+
+                foreach(Tile t in levelTiles)
+                {
+                    if (t.coordinates == actorCoordinates)
+                    {
+                        actorStartingTile = t;
+                        break;
+                    }
+                }
+
+                initialDirection = splitLine[2].ToCharArray()[0];
+
+                switch (initialDirection)
+                {
+                    case 'u':
+                        initialAngle = 180;
+                        break;
+                    case 'l':
+                        initialAngle = -90;
+                        break;
+                    case 'r':
+                        initialAngle = 90;
+                        break;
+                    default:
+                        //also case 'd'
+                        initialAngle = 0;
+                        break;
+                }
+
+                switch (splitLine[0].ToCharArray()[0])
+                {
+                    case 'P':
+                        player.setPosition(actorStartingTile.centre);
+                        player.changeYaw(MathHelper.ToRadians(initialAngle));
+                        break;
+
+                    case 'H':
+                        // Line: (Type, Tile, Direction, Trigger Type, Trigger Tile, InitiallyActive, CanBeReactivated, ResetTimer, IntervalTimer)
+                        bool initiallyActive;
+                        bool canBeReactivated;
+                        double? resetTimer, intervalTimer;
+                        Tile triggerTile;
+                        Vector2 triggerCoordinates;
+                        string[] triggerCoordinatesString;
+
+                        if (splitLine[5] == "T")
+                        {
+                            initiallyActive = true;
+                        }
+                        else
+                        {
+                            initiallyActive = false;
+                        }
+
+                        if (Double.Parse(splitLine[8]) == 0)
+                        {
+                            intervalTimer = null;
+                        }
+                        else
+                        {
+                            intervalTimer = Double.Parse(splitLine[8]);
+                        }
+
+                        createShockGate(actorStartingTile.centre, initiallyActive, intervalTimer, initialAngle);
+
+                        if (splitLine[3] != "N")
+                        {
+                            triggerCoordinatesString = splitLine[4].Split(',');
+                            triggerCoordinates = new Vector2(Int32.Parse(triggerCoordinatesString[0]), Int32.Parse(triggerCoordinatesString[1]));
+                            triggerTile = levelTiles[0];
+
+                            if (splitLine[6] == "T")
+                            {
+                                canBeReactivated = true;
+                            }
+                            else
+                            {
+                                canBeReactivated = false;
+                            }
+
+                            if (Double.Parse(splitLine[7]) == 0)
+                            {
+                                resetTimer = null;
+                            }
+                            else
+                            {
+                                resetTimer = Double.Parse(splitLine[7]);
+                            }
+
+                            foreach (Tile t in levelTiles)
+                            {
+                                if (t.coordinates == triggerCoordinates)
+                                {
+                                    triggerTile = t;
+                                    break;
+                                }
+                            }
+
+                            if (splitLine[3] == "P")
+                            {
+                                ProjectileActivatedTrigger pat = new ProjectileActivatedTrigger(projectileTriggerModel, triggerTile.centre, hazards[hazards.Count - 1], canBeReactivated, ProjectileClassification.shock, intervalTimer, resetTimer);
+                                projectileActivatedTriggers.Add(pat);
+                            }
+                            else if (splitLine[3] == "M")
+                            {
+                                MovementActivatedTrigger mat = new MovementActivatedTrigger(movementTriggerModel, triggerTile.centre, hazards[hazards.Count - 1], canBeReactivated, intervalTimer, resetTimer);
+                                movementActivatedTriggers.Add(mat);
+                            }
+                        }
+                        break;
+
+                    case 'G':
+                        string newGuardInstuctions;
+                        NPC newPawnGuard = new NPC(pawn, actorStartingTile, pawn.moveSpeed, initialAngle);
+                        guards.Add(newPawnGuard);
+                        if (splitLine.Length < 4)
+                        {
+                            newGuardInstuctions = "W10,";
+                        }
+                        else if (splitLine[3] == "")
+                        {
+                            newGuardInstuctions = "W10,";
+                        }
+                        else
+                        {
+                            newGuardInstuctions = splitLine[3];
+                        }
+
+                        updateNPCInstructions(newPawnGuard, newGuardInstuctions);
+                        break;
+                }
+            }
+
         }
 
         //public void buildTestLevel()

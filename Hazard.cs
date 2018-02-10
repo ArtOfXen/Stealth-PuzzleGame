@@ -35,7 +35,7 @@ namespace Game1
         /// </summary>
         /// 
 
-        public Hazard(ActorModel actorModel, Vector3 startPosition, double? timeUntilHazardResets = null, bool initiallyActive = true) : base(actorModel, startPosition, timeUntilHazardResets, initiallyActive)
+        public Hazard(ActorModel actorModel, Vector3 startPosition, bool initiallyActive = true, double? automaticIntervalTimer = null) : base(actorModel, startPosition, initiallyActive, automaticIntervalTimer)
         {
 
         }

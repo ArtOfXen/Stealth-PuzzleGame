@@ -68,7 +68,6 @@ namespace Game1
             foreach (Actor a in attachedActors)
             {
                 // calculate new hitbox size
-
                
                 float hitboxX;
                 float hitboxZ;
@@ -82,22 +81,30 @@ namespace Game1
                 {
                     minimumHitboxSize = a.modelData.boxSize.X;
                     differenceBetweenMinMax = a.modelData.boxSize.Z - a.modelData.boxSize.X;
+                    factorOfDifferenceToAddX = Math.Abs(currentYawAngleDeg % 180) / 90;
+                    if (factorOfDifferenceToAddX > 1)
+                    {
+                        factorOfDifferenceToAddX = 1 - (factorOfDifferenceToAddX - 1);
+                    }
+
+                    factorOfDifferenceToAddZ = 1 - factorOfDifferenceToAddX;
                 }
                 else
                 {
                     minimumHitboxSize = a.modelData.boxSize.Z;
                     differenceBetweenMinMax = a.modelData.boxSize.X - a.modelData.boxSize.Z;
+                    factorOfDifferenceToAddZ = Math.Abs(currentYawAngleDeg % 180) / 90;
+                    if (factorOfDifferenceToAddZ > 1)
+                    {
+                        factorOfDifferenceToAddZ = 1 - (factorOfDifferenceToAddZ - 1);
+                    }
+
+                    factorOfDifferenceToAddX = 1 - factorOfDifferenceToAddZ;
                 }
 
                 // calculate how big the hitbox should be in each direction by adding a factor of the difference in size between the max and min size
                 // size needs to change as actor rotates
-                factorOfDifferenceToAddZ = Math.Abs(currentYawAngleDeg % 180) / 90;
-                if (factorOfDifferenceToAddZ > 1)
-                {
-                    factorOfDifferenceToAddZ = 1 - (factorOfDifferenceToAddZ - 1);
-                }
-
-                factorOfDifferenceToAddX = 1 - factorOfDifferenceToAddZ;
+                
 
                 hitboxX = minimumHitboxSize + (factorOfDifferenceToAddX * differenceBetweenMinMax);
                 hitboxZ = minimumHitboxSize + (factorOfDifferenceToAddZ * differenceBetweenMinMax);
