@@ -24,29 +24,32 @@ namespace Game1
 
         private bool active;
         private bool initiallyActive;
-        private double timeTriggered;
-        private double? resetTimer;
+        private double lastIntervalTime;
+        private double? intervalTimer;
 
-        public VariableObstacle(ActorModel actorModel, Vector3 startPosition, double? timeUntilObstacleResets = null, bool activeAtLevelStart = true) : base(actorModel, startPosition)
+        public VariableObstacle(ActorModel actorModel, Vector3 startPosition, bool activeAtLevelStart = true, double? automaticIntervalTimer = null) : base(actorModel, startPosition)
         {
             initiallyActive = activeAtLevelStart;
             active = activeAtLevelStart;
-            resetTimer = timeUntilObstacleResets;
+            intervalTimer = automaticIntervalTimer;
+            if (intervalTimer != null)
+            {
+                lastIntervalTime = DateTime.Now.TimeOfDay.TotalSeconds;
+            }
         }
 
-        public void checkTimerStatus()
+        public void update()
         {
-            if (resetTimer == null)
+            if (intervalTimer == null)
             {
                 return;
             }
-
-            if (active != initiallyActive)
-            {
+            else { 
                 double currentSeconds = DateTime.Now.TimeOfDay.TotalSeconds;
-                if (currentSeconds > timeTriggered + resetTimer)
+                if (currentSeconds > lastIntervalTime + intervalTimer)
                 {
                     changeActiveStatus();
+                    lastIntervalTime = currentSeconds;
                 }
             }
         }
@@ -65,12 +68,6 @@ namespace Game1
             else
             {
                 active = true;
-            }
-
-            if (resetTimer != null)
-            {
-                timeTriggered = DateTime.Now.TimeOfDay.TotalSeconds;
-                // start timing reset
             }
         }
 

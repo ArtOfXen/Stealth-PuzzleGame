@@ -11,7 +11,7 @@ namespace Game1
     {
         ProjectileClassification nessecaryProjectile;
 
-        public ProjectileActivatedTrigger(ActorModel actorModel, Vector3 startPosition, VariableObstacle newLinkedObstacle, bool canBeActivatedMultipleTimes, ProjectileClassification triggeringProjectile) : base(actorModel, startPosition, newLinkedObstacle, canBeActivatedMultipleTimes)
+        public ProjectileActivatedTrigger(ActorModel actorModel, Vector3 startPosition, VariableObstacle newLinkedObstacle, bool canBeActivatedMultipleTimes, ProjectileClassification triggeringProjectile, double? automaticIntervalTimer = null, double? automaticResetTimer = null) : base(actorModel, startPosition, newLinkedObstacle, canBeActivatedMultipleTimes, automaticIntervalTimer, automaticResetTimer)
         {
             nessecaryProjectile = triggeringProjectile;
         }

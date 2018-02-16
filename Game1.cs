@@ -10,20 +10,18 @@ using System.IO;
 
 // PRIORITY
 
-// check / shrink hitbox sizes
-
-// one side of shock gate doesn't block movement
+// create 'inUse' UI for pull projectile, reminding player to right-click to use it
 
 // SECONDARY
-// make pull affect hazards instead of enemies, pull hazards into enemies
 // set pull to pull things to tile it is on, instead of its position
+// pulls things on same row/column as it only
+// change model to demonstrate better
 
 // NPCs need to find their way back on track after getting pulled away
-    // After move instruction is complete, check coordinates against where it should be in patrol path
+// After move instruction is complete, check coordinates against where it should be in patrol path
+// Projectile firing hazard (wall darts)
 
 // OTHER
-// get enemies to shoot each other - don't know if enemies will shoot yet
-
 // moving platforms (patrol like enemies)
 // would have to move things on top of them as well
 // if character.underfootHitbox collides with moving platform, then move character when platform moves
@@ -40,7 +38,6 @@ namespace Game1
         public bool shock;
         public bool pull;
         // swap? swaps two actors around
-        // move? use on wheeled hazard to cause it to move forward until it hits a wall or gap in floor
         // clear fog?
         // drone? overhead camera follows last fired drone projectile
         // power? Turns on electrical hazards or activates consoles
@@ -128,7 +125,8 @@ namespace Game1
         Player player;
         Actor goal;
 
-        List<string> level;
+        List<string> levelLayout;
+        List<string> levelActors;
         List<string> NPCInstructions;
         List<int> allowedProjectiles; 
 
@@ -225,7 +223,8 @@ namespace Game1
             pull.moveSpeed = 12;
             pull.allowedThisLevel = false;
             
-            level = new List<string>();
+            levelLayout = new List<string>();
+            levelActors = new List<string>();
             NPCInstructions = new List<string>();
             allowedProjectiles = new List<int>();
 
@@ -239,8 +238,9 @@ namespace Game1
                         if (line[0] == '#')
                         {
                             // remove # sign
-                            string instructionLine = line.Remove(0, 1);
-                            NPCInstructions.Add(instructionLine);
+                            string levelActor = line.Remove(0, 1);
+                            levelActors.Add(levelActor);
+                            //NPCInstructions.Add(instructionLine);
                         }
                         else if (line[0] == '~')
                         {
@@ -280,7 +280,7 @@ namespace Game1
                         }
                         else
                         {
-                            level.Add(line);
+                            levelLayout.Add(line);
                         }
                     }
                 }
@@ -349,24 +349,24 @@ namespace Game1
             levelBounds.left = -GraphicsDevice.Viewport.Width + wall.boxSize.X;
             levelBounds.right = GraphicsDevice.Viewport.Height - wall.boxSize.X;
 
-            createLevel(level);
+            createLevel(levelLayout, levelActors);
 
             // if less instructions than guards, add instructions to stand still
-            while (NPCInstructions.Count < guards.Count)
-            {
-                NPCInstructions.Add("W10;");
-            }
+            //while (NPCInstructions.Count < guards.Count)
+            //{
+            //    NPCInstructions.Add("W10;");
+            //}
 
-            // add instructions to guards
-            for (int i = 0; i < guards.Count; i++)
-            {
-                if (NPCInstructions[i] == "")
-                {
-                    NPCInstructions[i] = "W10;";
-                }
-                updateNPCInstructions(guards[i], NPCInstructions[i]);
+            //// add instructions to guards
+            //for (int i = 0; i < guards.Count; i++)
+            //{
+            //    if (NPCInstructions[i] == "")
+            //    {
+            //        NPCInstructions[i] = "W10;";
+            //    }
+            //    updateNPCInstructions(guards[i], NPCInstructions[i]);
                 
-            }
+            //}
             // send terrain data to characters
             Character.setMovementBlockers(terrain);
         }
@@ -423,6 +423,7 @@ namespace Game1
             List<Projectile> activeProjectiles = new List<Projectile>();
             KeyboardState keyboard = Keyboard.GetState();
             MouseState mouse = Mouse.GetState();
+            Projectile activePullProjectile = null;
 
             // check for exit
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || keyboard.IsKeyDown(Keys.Escape))
@@ -438,9 +439,9 @@ namespace Game1
             {
                 enemyVisionBlockers.Add(n);
             }
-            foreach(Actor h in hazards)
+            foreach(Hazard h in hazards)
             {
-                h.updateHitboxes();
+                h.update();
                 enemyVisionBlockers.Add(h);
             }
 
@@ -448,7 +449,8 @@ namespace Game1
 
             onFloor = false;
 
-            if (player.collisionHitbox.Intersects(goal.collisionHitbox))
+            // player / end goal collision
+            if (player.collidesWith(goal))
             {
                 goalFoundUI.setActive(true);
             }
@@ -457,7 +459,7 @@ namespace Game1
             foreach (Hazard h in hazards)
             {
                 // hazard / player collision
-                if (h.collisionHitbox.Intersects(player.collisionHitbox) && h.isActive())
+                if (h.collidesWith(player) && h.isActive())
                 {
                     gameOverUI.setActive(true);
                 }
@@ -501,7 +503,7 @@ namespace Game1
                     g.update(enemyVisionBlockers);
 
                     // detect player if collide with enemy
-                    if (player.collisionHitbox.Intersects(g.collisionHitbox))
+                    if (player.collidesWith(g))
                     {
                         g.detectPlayer();
                         gameOverUI.setActive(true);
@@ -523,7 +525,7 @@ namespace Game1
                                  * 
                                  * 
                                  * 
-                                 * make enemy run towards player
+                                 * npc reaction to seeing player
                                  * 
                                  * 
                                  * 
@@ -537,26 +539,87 @@ namespace Game1
                     // kill guards who collide with hazards
                     foreach(Hazard h in hazards)
                     {
-                        if (h.collisionHitbox.Intersects(g.collisionHitbox) && h.isActive())
+                        if (h.collidesWith(g) && h.isActive())
                         {
                             g.kill();
                         }
                     }
                 }
             }
-            
+
             // projectile updates
-            foreach(Projectile pj in allProjectiles)
+            
+            // look for an active pull projectile
+            foreach (Projectile pj in allProjectiles)
+            {
+                if (pj.getClassification() == ProjectileClassification.pull)
+                {
+                    activePullProjectile = pj;
+                    break;
+                }
+            }
+
+            foreach (Projectile pj in allProjectiles)
             {
                 bool destroyProjectile = false;
 
-                pj.move();
+                //if (pj.getClassification() == ProjectileClassification.pull)
+                //{
+                //    foreach(Projectile otherPj in allProjectiles)
+                //    {
+                //        if (otherPj.Equals(pj))
+                //        {
+                //            continue;
+                //        }
+
+                //        if (otherPj.collisionHitbox.Intersects(pj.collisionHitbox))
+                //        {
+                //            otherPj.requiresDeletion = true;
+                //            continue;
+                //        }
+
+                //        if (pj.hasActionStarted() && pj.actorInActionRadius(otherPj.collisionHitbox))
+                //        {
+                //            otherPj.move(new Vector3(pj.position.X - otherPj.position.X, 0f, pj.position.Z - otherPj.position.Z) / 60);
+                //        }
+                //    }
+                //}
+
+                if (activePullProjectile == null)
+                {
+                    pj.move();
+                }
+                else
+                {
+                    if (!pj.Equals(activePullProjectile) && pj.collidesWith(activePullProjectile))
+                    {
+                        destroyProjectile = true;
+                    }
+                    else if (!pj.Equals(activePullProjectile) && activePullProjectile.hasActionStarted() && activePullProjectile.actorInActionRadius(pj.collisionHitbox))
+                    {
+                        /*
+                         * 
+                         * 
+                         * 
+                         * don't move at all if in contact with minimum range, or delete immediately
+                         * 
+                         * 
+                         * 
+                         */
+                        pj.move(new Vector3(activePullProjectile.position.X - pj.position.X, 0f, activePullProjectile.position.Z - pj.position.Z) / 60);
+                    }
+                    else
+                    {
+                        pj.move();
+                    }
+                }
+
                 pj.updateHitboxes();
 
                 // projectile / guard collision
                 foreach (NPC g in guards)
                 {
-                    if (pj.collisionHitbox.Intersects(g.collisionHitbox) && !g.isDead())
+                    if (pj.collidesWith(g) && !g.isDead())
                     {
                         if (pj.getClassification() == ProjectileClassification.shock && g.isEffectedBy(pj.getClassification()))
                         {
@@ -580,33 +643,19 @@ namespace Game1
                     if (pj.getClassification() == ProjectileClassification.pull && g.isEffectedBy(pj.getClassification()) && pj.hasActionStarted())
                     {
                         // in range of enemy when activated
-                        if (pj.enemyInActionRadius(g.collisionHitbox))
+                        if (pj.actorInActionRadius(g.collisionHitbox))
                         {
                            g.move(new Vector3(pj.position.X - g.position.X, 0f, pj.position.Z - g.position.Z) / 60);
                         }
                     }
                 }
 
-                foreach(ProjectileActivatedTrigger pat in projectileActivatedTriggers)
-                {
-                    if (pj.collisionHitbox.Intersects(pat.collisionHitbox))
-                    {
-                        pat.hitByProjectile(pj.getClassification());
-                        destroyProjectile = true;
-                    }
-                }
-                
-                if (pj.requiresDeletion)
-                {
-                    destroyProjectile = true;
-                }
-
                 // projectile / terrain collision
                 foreach (Actor t in terrain)
                 {
-                    if (pj.collisionHitbox.Intersects(t.collisionHitbox))
+                    if (pj.collidesWith(t))
                     {
-                        if (pj.getClassification() == ProjectileClassification.pull && !pj.hasActionStarted())
+                        if (pj.getClassification() == ProjectileClassification.pull)
                         {
                             if (pj.hasNoParentActor())
                             {
@@ -624,9 +673,29 @@ namespace Game1
                     }
                 }
 
+                foreach (ProjectileActivatedTrigger pat in projectileActivatedTriggers)
+                {
+                    if (pj.collidesWith(pat))
+                    {
+                        pat.hitByProjectile(pj.getClassification());
+                        destroyProjectile = true;
+                    }
+                }
+                
+                if (pj.requiresDeletion)
+                {
+                    destroyProjectile = true;
+                }
+
                 // list of projectiles that don't need destroying
                 if (destroyProjectile == false)
+                {
                     activeProjectiles.Add(pj);
+                }
+                else
+                {
+                    pj.detachFromParentActor();
+                }
             }
 
             // replace list of projectiles with list of projectiles that didn't collide with anything
@@ -634,27 +703,29 @@ namespace Game1
             allProjectiles = activeProjectiles;
 
             // check triggers
-            foreach (TimeActivatedTrigger tat in timeActivatedTriggers)
-            {
-                tat.checkTimer();
-            }
 
             foreach(MovementActivatedTrigger mat in movementActivatedTriggers)
             {
                 mat.checkCurrentlyCollidingCharacter();
+                mat.checkResetTimer();
 
-                if (mat.collisionHitbox.Intersects(player.collisionHitbox))
+                if (mat.collidesWith(player))
                 {
                     mat.collisionWithCharacter(player);
                 }
 
                 foreach(NPC g in guards)
                 {
-                    if (mat.collisionHitbox.Intersects(g.collisionHitbox))
+                    if (mat.collidesWith(g))
                     {
                         mat.collisionWithCharacter(g);
                     }
                 }
+            }
+
+            foreach (ProjectileActivatedTrigger pat in projectileActivatedTriggers)
+            {
+                pat.checkResetTimer();
             }
 
 
@@ -720,8 +791,15 @@ namespace Game1
                 // fire gun
                 if (mouse.LeftButton == ButtonState.Pressed && gunLoaded && !loadedProjectile.Equals(none))
                 {
-                    gunLoaded = false;
-                    allProjectiles.Add(createNewProjectile(loadedProjectile.classification));
+                    if (loadedProjectile.Equals(pull) && PullProjectile.inUse == true)
+                    {
+                        // only one pull projectile allowed to be active at any one time
+                    }
+                    else
+                    {
+                        gunLoaded = false;
+                        allProjectiles.Add(createNewProjectile(loadedProjectile.classification));
+                    }
                 }
                 // mouse button must be released in between each shot
                 if (mouse.LeftButton == ButtonState.Released && !gunLoaded && !loadedProjectile.Equals(none))
@@ -867,16 +945,21 @@ namespace Game1
             List<Tile> npcPatrolPath = new List<Tile>();
             Vector2 lastTileCoordinates = npc.currentTile.coordinates;
 
+            if (instructionList[instructionList.Length - 1] != ',')
+            {
+                instructionList += ",";
+            }
+
             for (int i = 0; i < instructionList.Length; i++)
             {
                 char c = instructionList[i];
-                if (c == ';')
+                if (c == ',')
                 {
                     numOfInstructions++;
                 }
             }
 
-            individualInstructions = instructionList.Split(';');
+            individualInstructions = instructionList.Split(',');
 
             for (int i = 0; i < numOfInstructions; i++)
             {
@@ -937,28 +1020,19 @@ namespace Game1
         //    terrain.Add(newWall);
         //}
 
-        public void createShockGate(Vector3 position, bool initiallyActive, float rotation = 0)
+        public void createShockGate(Vector3 position, bool initiallyActive, double? intervalTimer = null, float rotation = 0)
         {
-            Hazard newShockGate = new Hazard(electricBeams, position, null, initiallyActive);
-
-            //ProjectileActivatedTrigger pat = new ProjectileActivatedTrigger(projectileTriggerModel, position - new Vector3(150f, -100f, 0f), newShockGate, true, ProjectileClassification.shock);
-            //projectileActivatedTriggers.Add(pat);
-
-            //TimeActivatedTrigger tat = new TimeActivatedTrigger(cube, position - new Vector3(150f, -100f, 0f), newShockGate, true, 2);
-            //timeActivatedTriggers.Add(tat);
-
-            MovementActivatedTrigger mat = new MovementActivatedTrigger(movementTriggerModel, position - new Vector3(0f, 0f, -150f), newShockGate, true);
-            movementActivatedTriggers.Add(mat);
+            Hazard newShockGate = new Hazard(electricBeams, position, initiallyActive, intervalTimer);
+            newShockGate.changeYaw(MathHelper.ToRadians(rotation));
 
             // left wall
-            newShockGate.attachNewActor(gateWalls, new Vector3(-newShockGate.getModelData().boxExtents.X * (float)Math.Cos(MathHelper.ToRadians(rotation)), 0f, -newShockGate.getModelData().boxExtents.X * (float)Math.Sin(MathHelper.ToRadians(rotation))), 0f);
+            newShockGate.attachNewActor(gateWalls, new Vector3(-newShockGate.getModelData().boxExtents.X * (float)Math.Cos(MathHelper.ToRadians(rotation)), 0f, -newShockGate.getModelData().boxExtents.X * (float)Math.Sin(MathHelper.ToRadians(rotation))), MathHelper.ToRadians(rotation));
             // right wall
-            newShockGate.attachNewActor(gateWalls, new Vector3(newShockGate.getModelData().boxExtents.X * (float)Math.Cos(MathHelper.ToRadians(rotation)), 0f, newShockGate.getModelData().boxExtents.X * (float)Math.Sin(MathHelper.ToRadians(rotation))), 0f);
+            newShockGate.attachNewActor(gateWalls, new Vector3(newShockGate.getModelData().boxExtents.X * (float)Math.Cos(MathHelper.ToRadians(rotation)), 0f, newShockGate.getModelData().boxExtents.X * (float)Math.Sin(MathHelper.ToRadians(rotation))), MathHelper.ToRadians(rotation));
 
-            newShockGate.changeYaw(MathHelper.ToRadians(rotation));
             hazards.Add(newShockGate);
 
-            for(int i = 1; i <newShockGate.numberOfAttachedActors() - 1; i++)
+            for(int i = 1; i <newShockGate.numberOfAttachedActors(); i++)
             {
                 newShockGate.getAttachedActor(i).getModelData().resizeHitbox(new Vector3(0.5f, 1f, 1f)); // shrink attached walls, otherwise they interfere with shock gate collision detection
                 terrain.Add(newShockGate.getAttachedActor(i));
@@ -986,46 +1060,31 @@ namespace Game1
             return newProjectile;
         }
 
-        public void createLevel(List<string> levelTextRepresentation)
+        public void createLevel(List<string> levelTextRepresentation, List<string> levelActorsTextRepresentation)
         {
             Tile newTile;
             float zPosition = 0f;
 
             for (int i = 0; i < levelTextRepresentation.Count; i++)
             {
-                if (levelTextRepresentation[i].Length % 2 != 0)
-                {
-                    levelTextRepresentation[i] += " ";
-                }
+                //if (levelTextRepresentation[i].Length % 2 != 0)
+                //{
+                //    levelTextRepresentation[i] += " ";
+                //}
 
-                for (int j = 0; j < levelTextRepresentation[i].Length; j+=2)
+                for (int j = 0; j < levelTextRepresentation[i].Length; j++)
                 {
-                    float xPosition = (float)(tileSize * Math.Ceiling((double)(j / 2)));
+                    float xPosition = (float)(tileSize * j);
                     Vector3 tilePosition = new Vector3(xPosition, 0f, zPosition);
                     char tileContents = levelTextRepresentation[i][j];
-                    char initialDirection = levelTextRepresentation[i][j + 1];
-                    float initialAngle;
+                    //char initialDirection = levelTextRepresentation[i][j + 1];
+                    //float initialAngle;
 
-                    newTile.coordinates.X = (float)Math.Ceiling((double)(j / 2));
+                    newTile.coordinates.X = j;
                     newTile.coordinates.Y = zPosition / tileSize;
                     newTile.centre = new Vector3(xPosition, 0f, zPosition);
 
-                    switch(initialDirection)
-                    {
-                        case 'u':
-                            initialAngle = 180;
-                            break;
-                        case 'l':
-                            initialAngle = -90;
-                            break;
-                        case 'r':
-                            initialAngle = 90;
-                            break;
-                        default:
-                            //also case 'd'
-                            initialAngle = 0;
-                            break;
-                    }
+                    
 
                     if (tileContents != 'x') // x = hole in floor
                     {
@@ -1037,23 +1096,22 @@ namespace Game1
                                 terrain.Add(new Actor(wall, tilePosition));
                                 break;
 
-                            case 'H':
-                                createShockGate(tilePosition, true, initialAngle);
-                                break;
+                            //case 'H':
+                            //    createShockGate(tilePosition, true, initialAngle);
+                            //    break;
 
-                            case 'h':
-                                createShockGate(tilePosition, false, initialAngle);
-                                break;
+                            //case 'h':
+                            //    createShockGate(tilePosition, false, initialAngle);
+                            //    break;
 
-                            case 'P':
-                                player.setPosition(tilePosition);
-                                player.changeYaw(MathHelper.ToRadians(initialAngle));
-                                break;
+                            //case 'P':
+                            //    player.setPosition(tilePosition);
+                            //    player.changeYaw(MathHelper.ToRadians(initialAngle));
+                            //    break;
 
-                            case 'G':
-                                guards.Add(new NPC(pawn, newTile, pawn.moveSpeed));
-                                guards[guards.Count - 1].changeYaw(MathHelper.ToRadians(initialAngle));
-                                break;
+                            //case 'G':
+                            //    guards.Add(new NPC(pawn, newTile, pawn.moveSpeed, initialAngle));
+                            //    break;
 
                             case 'E':
                                 goal.setPosition(tilePosition);
@@ -1069,6 +1127,154 @@ namespace Game1
 
                 zPosition += tileSize;
             }
+
+            for (int i = 0; i < levelActorsTextRepresentation.Count; i++)
+            {
+                string[] splitLine;
+                Vector2 actorCoordinates;
+                string[] actorCoordinatesString;
+                char initialDirection;
+                float initialAngle;
+                Tile actorStartingTile = levelTiles[0];
+
+                splitLine = levelActorsTextRepresentation[i].Split(';');
+
+                actorCoordinatesString = splitLine[1].Split(',');
+                actorCoordinates = new Vector2(Int32.Parse(actorCoordinatesString[0]), Int32.Parse(actorCoordinatesString[1]));
+
+                foreach(Tile t in levelTiles)
+                {
+                    if (t.coordinates == actorCoordinates)
+                    {
+                        actorStartingTile = t;
+                        break;
+                    }
+                }
+
+                initialDirection = splitLine[2].ToCharArray()[0];
+
+                switch (initialDirection)
+                {
+                    case 'u':
+                        initialAngle = 180;
+                        break;
+                    case 'l':
+                        initialAngle = -90;
+                        break;
+                    case 'r':
+                        initialAngle = 90;
+                        break;
+                    default:
+                        //also case 'd'
+                        initialAngle = 0;
+                        break;
+                }
+
+                switch (splitLine[0].ToCharArray()[0])
+                {
+                    case 'P':
+                        player.setPosition(actorStartingTile.centre);
+                        player.changeYaw(MathHelper.ToRadians(initialAngle));
+                        break;
+
+                    case 'H':
+                        // Line: (Type, Tile, Direction, Trigger Type, Trigger Tile, InitiallyActive, CanBeReactivated, ResetTimer, IntervalTimer)
+                        bool initiallyActive;
+                        bool canBeReactivated;
+                        double? resetTimer, intervalTimer;
+                        Tile triggerTile;
+                        Vector2 triggerCoordinates;
+                        string[] triggerCoordinatesString;
+
+                        if (splitLine[5] == "T")
+                        {
+                            initiallyActive = true;
+                        }
+                        else
+                        {
+                            initiallyActive = false;
+                        }
+
+                        if (Double.Parse(splitLine[8]) == 0)
+                        {
+                            intervalTimer = null;
+                        }
+                        else
+                        {
+                            intervalTimer = Double.Parse(splitLine[8]);
+                        }
+
+                        createShockGate(actorStartingTile.centre, initiallyActive, intervalTimer, initialAngle);
+
+                        if (splitLine[3] != "N")
+                        {
+                            triggerCoordinatesString = splitLine[4].Split(',');
+                            triggerCoordinates = new Vector2(Int32.Parse(triggerCoordinatesString[0]), Int32.Parse(triggerCoordinatesString[1]));
+                            triggerTile = levelTiles[0];
+
+                            if (splitLine[6] == "T")
+                            {
+                                canBeReactivated = true;
+                            }
+                            else
+                            {
+                                canBeReactivated = false;
+                            }
+
+                            if (Double.Parse(splitLine[7]) == 0)
+                            {
+                                resetTimer = null;
+                            }
+                            else
+                            {
+                                resetTimer = Double.Parse(splitLine[7]);
+                            }
+
+                            foreach (Tile t in levelTiles)
+                            {
+                                if (t.coordinates == triggerCoordinates)
+                                {
+                                    triggerTile = t;
+                                    break;
+                                }
+                            }
+
+                            if (splitLine[3] == "P")
+                            {
+                                ProjectileActivatedTrigger pat = new ProjectileActivatedTrigger(projectileTriggerModel, triggerTile.centre, hazards[hazards.Count - 1], canBeReactivated, ProjectileClassification.shock, intervalTimer, resetTimer);
+                                projectileActivatedTriggers.Add(pat);
+                            }
+                            else if (splitLine[3] == "M")
+                            {
+                                MovementActivatedTrigger mat = new MovementActivatedTrigger(movementTriggerModel, triggerTile.centre, hazards[hazards.Count - 1], canBeReactivated, intervalTimer, resetTimer);
+                                movementActivatedTriggers.Add(mat);
+                            }
+                        }
+                        break;
+
+                    case 'G':
+                        // Line: (Type, Tile, Direction, Instruction List)
+                        string newGuardInstuctions;
+                        NPC newPawnGuard = new NPC(pawn, actorStartingTile, pawn.moveSpeed, initialAngle);
+                        guards.Add(newPawnGuard);
+                        if (splitLine.Length < 4)
+                        {
+                            newGuardInstuctions = "W10,";
+                        }
+                        else if (splitLine[3] == "")
+                        {
+                            newGuardInstuctions = "W10,";
+                        }
+                        else
+                        {
+                            newGuardInstuctions = splitLine[3];
+                        }
+
+                        updateNPCInstructions(newPawnGuard, newGuardInstuctions);
+                        break;
+                }
+            }
+
         }
 
         //public void buildTestLevel()

@@ -12,7 +12,7 @@ namespace Game1
 
         private Character currentlyCollidingCharacter;
 
-        public MovementActivatedTrigger(ActorModel actorModel, Vector3 startPosition, VariableObstacle newLinkedObstacle, bool canBeActivatedMultipleTimes) : base(actorModel, startPosition, newLinkedObstacle, canBeActivatedMultipleTimes)
+        public MovementActivatedTrigger(ActorModel actorModel, Vector3 startPosition, VariableObstacle newLinkedObstacle, bool canBeActivatedMultipleTimes, double? automaticIntervalTimer = null, double? automaticResetTimer = null) : base(actorModel, startPosition, newLinkedObstacle, canBeActivatedMultipleTimes, automaticIntervalTimer, automaticResetTimer)
         {
             currentlyCollidingCharacter = null;
         }
@@ -37,10 +37,14 @@ namespace Game1
                 if (!(collisionHitbox.Intersects(currentlyCollidingCharacter.collisionHitbox)))
                 {
                     currentlyCollidingCharacter = null;
-                    if (canBeActivated())
+                    if (canBeActivated() && resetTimer == null)
                     {
                         activateTrigger(true);
                     }
+                }
+                else
+                {
+                    activationTime = DateTime.Now.TimeOfDay.TotalSeconds;
                 }
             }
         }

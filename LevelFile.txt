@@ -1,8 +1,10 @@
-O O O O O O O O
-          H   O
-    E         O
-        Pu    O
-O O O O O O O O
-#T90;W1;
-#Z2;
+OOOOOOO
+O     O
+O     O
+O     O
+OE    O
+OOOOOOO
 ~1;2;
+#P;1,1;u;
+#H;3,2;r;N;0,0;t;t;3;0;
+#H;3,4;d;N;0,0;t;f;0;1;

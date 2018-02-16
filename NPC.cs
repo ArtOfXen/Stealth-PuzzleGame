@@ -57,7 +57,7 @@ namespace Game1
         public Tile currentTile;
         Tile destinationTile;
 
-        public NPC(EnemyStruct enemyStruct, Tile startingTile, int movementSpeed) : base(enemyStruct.unalertModel, new Vector3(startingTile.centre.X, 0f, startingTile.centre.Z), movementSpeed)
+        public NPC(EnemyStruct enemyStruct, Tile startingTile, int movementSpeed, float initialAngle) : base(enemyStruct.unalertModel, new Vector3(startingTile.centre.X, 0f, startingTile.centre.Z), movementSpeed)
         {
             dead = false;
             detectionArea = new List<BoundingSphere>();
@@ -76,7 +76,8 @@ namespace Game1
             currentTileIndex = 0;
             destinationTileIndex = 1;
 
-            startingAngle = currentYawAngleDeg;
+            startingAngle = initialAngle;
+            changeYaw(MathHelper.ToRadians(startingAngle));
             resettingAngle = false;
         }
 
