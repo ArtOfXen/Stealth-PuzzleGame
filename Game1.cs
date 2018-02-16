@@ -10,23 +10,15 @@ using System.IO;
 
 // PRIORITY
 
-// trigger reset timers
-    // test
-
-// check / shrink hitbox sizes
-    // fixed, needs testing
-
-// add interval/reset timer code to trigger class
-    // needs testing
+// create 'inUse' UI for pull projectile, reminding player to right-click to use it
 
 // SECONDARY
-// make pull affect other projectiles? Pull the power projectile to a trigger which is around a corner?
 // set pull to pull things to tile it is on, instead of its position
-    // pulls things on same row/column as it only
-    // change model to demonstrate better
+// pulls things on same row/column as it only
+// change model to demonstrate better
 
 // NPCs need to find their way back on track after getting pulled away
-    // After move instruction is complete, check coordinates against where it should be in patrol path
+// After move instruction is complete, check coordinates against where it should be in patrol path
 // Projectile firing hazard (wall darts)
 
 // OTHER
@@ -431,6 +423,7 @@ namespace Game1
             List<Projectile> activeProjectiles = new List<Projectile>();
             KeyboardState keyboard = Keyboard.GetState();
             MouseState mouse = Mouse.GetState();
+            Projectile activePullProjectile = null;
 
             // check for exit
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || keyboard.IsKeyDown(Keys.Escape))
@@ -457,7 +450,7 @@ namespace Game1
             onFloor = false;
 
             // player / end goal collision
-            if (player.collisionHitbox.Intersects(goal.collisionHitbox))
+            if (player.collidesWith(goal))
             {
                 goalFoundUI.setActive(true);
             }
@@ -466,7 +459,7 @@ namespace Game1
             foreach (Hazard h in hazards)
             {
                 // hazard / player collision
-                if (h.collisionHitbox.Intersects(player.collisionHitbox) && h.isActive())
+                if (h.collidesWith(player) && h.isActive())
                 {
                     gameOverUI.setActive(true);
                 }
@@ -510,7 +503,7 @@ namespace Game1
                     g.update(enemyVisionBlockers);
 
                     // detect player if collide with enemy
-                    if (player.collisionHitbox.Intersects(g.collisionHitbox))
+                    if (player.collidesWith(g))
                     {
                         g.detectPlayer();
                         gameOverUI.setActive(true);
@@ -546,26 +539,87 @@ namespace Game1
                     // kill guards who collide with hazards
                     foreach(Hazard h in hazards)
                     {
-                        if (h.collisionHitbox.Intersects(g.collisionHitbox) && h.isActive())
+                        if (h.collidesWith(g) && h.isActive())
                         {
                             g.kill();
                         }
                     }
                 }
             }
-            
+
             // projectile updates
-            foreach(Projectile pj in allProjectiles)
+            
+            // look for an active pull projectile
+            foreach (Projectile pj in allProjectiles)
+            {
+                if (pj.getClassification() == ProjectileClassification.pull)
+                {
+                    activePullProjectile = pj;
+                    break;
+                }
+            }
+
+            foreach (Projectile pj in allProjectiles)
             {
                 bool destroyProjectile = false;
 
-                pj.move();
+                //if (pj.getClassification() == ProjectileClassification.pull)
+                //{
+                //    foreach(Projectile otherPj in allProjectiles)
+                //    {
+                //        if (otherPj.Equals(pj))
+                //        {
+                //            continue;
+                //        }
+
+                //        if (otherPj.collisionHitbox.Intersects(pj.collisionHitbox))
+                //        {
+                //            otherPj.requiresDeletion = true;
+                //            continue;
+                //        }
+
+                //        if (pj.hasActionStarted() && pj.actorInActionRadius(otherPj.collisionHitbox))
+                //        {
+                //            otherPj.move(new Vector3(pj.position.X - otherPj.position.X, 0f, pj.position.Z - otherPj.position.Z) / 60);
+                //        }
+                //    }
+                //}
+
+                if (activePullProjectile == null)
+                {
+                    pj.move();
+                }
+                else
+                {
+                    if (!pj.Equals(activePullProjectile) && pj.collidesWith(activePullProjectile))
+                    {
+                        destroyProjectile = true;
+                    }
+                    else if (!pj.Equals(activePullProjectile) && activePullProjectile.hasActionStarted() && activePullProjectile.actorInActionRadius(pj.collisionHitbox))
+                    {
+                        /*
+                         * 
+                         * 
+                         * 
+                         * don't move at all if in contact with minimum range, or delete immediately
+                         * 
+                         * 
+                         * 
+                         */
+                        pj.move(new Vector3(activePullProjectile.position.X - pj.position.X, 0f, activePullProjectile.position.Z - pj.position.Z) / 60);
+                    }
+                    else
+                    {
+                        pj.move();
+                    }
+                }
+
                 pj.updateHitboxes();
 
                 // projectile / guard collision
                 foreach (NPC g in guards)
                 {
-                    if (pj.collisionHitbox.Intersects(g.collisionHitbox) && !g.isDead())
+                    if (pj.collidesWith(g) && !g.isDead())
                     {
                         if (pj.getClassification() == ProjectileClassification.shock && g.isEffectedBy(pj.getClassification()))
                         {
@@ -589,7 +643,7 @@ namespace Game1
                     if (pj.getClassification() == ProjectileClassification.pull && g.isEffectedBy(pj.getClassification()) && pj.hasActionStarted())
                     {
                         // in range of enemy when activated
-                        if (pj.enemyInActionRadius(g.collisionHitbox))
+                        if (pj.actorInActionRadius(g.collisionHitbox))
                         {
                            g.move(new Vector3(pj.position.X - g.position.X, 0f, pj.position.Z - g.position.Z) / 60);
                         }
@@ -599,9 +653,9 @@ namespace Game1
                 // projectile / terrain collision
                 foreach (Actor t in terrain)
                 {
-                    if (pj.collisionHitbox.Intersects(t.collisionHitbox))
+                    if (pj.collidesWith(t))
                     {
-                        if (pj.getClassification() == ProjectileClassification.pull && !pj.hasActionStarted())
+                        if (pj.getClassification() == ProjectileClassification.pull)
                         {
                             if (pj.hasNoParentActor())
                             {
@@ -621,7 +675,7 @@ namespace Game1
 
                 foreach (ProjectileActivatedTrigger pat in projectileActivatedTriggers)
                 {
-                    if (pj.collisionHitbox.Intersects(pat.collisionHitbox))
+                    if (pj.collidesWith(pat))
                     {
                         pat.hitByProjectile(pj.getClassification());
                         destroyProjectile = true;
@@ -631,11 +685,17 @@ namespace Game1
                 if (pj.requiresDeletion)
                 {
                     destroyProjectile = true;
-                }                
+                }
 
                 // list of projectiles that don't need destroying
                 if (destroyProjectile == false)
+                {
                     activeProjectiles.Add(pj);
+                }
+                else
+                {
+                    pj.detachFromParentActor();
+                }
             }
 
             // replace list of projectiles with list of projectiles that didn't collide with anything
@@ -649,14 +709,14 @@ namespace Game1
                 mat.checkCurrentlyCollidingCharacter();
                 mat.checkResetTimer();
 
-                if (mat.collisionHitbox.Intersects(player.collisionHitbox))
+                if (mat.collidesWith(player))
                 {
                     mat.collisionWithCharacter(player);
                 }
 
                 foreach(NPC g in guards)
                 {
-                    if (mat.collisionHitbox.Intersects(g.collisionHitbox))
+                    if (mat.collidesWith(g))
                     {
                         mat.collisionWithCharacter(g);
                     }
@@ -731,8 +791,15 @@ namespace Game1
                 // fire gun
                 if (mouse.LeftButton == ButtonState.Pressed && gunLoaded && !loadedProjectile.Equals(none))
                 {
-                    gunLoaded = false;
-                    allProjectiles.Add(createNewProjectile(loadedProjectile.classification));
+                    if (loadedProjectile.Equals(pull) && PullProjectile.inUse == true)
+                    {
+                        // only one pull projectile allowed to be active at any one time
+                    }
+                    else
+                    {
+                        gunLoaded = false;
+                        allProjectiles.Add(createNewProjectile(loadedProjectile.classification));
+                    }
                 }
                 // mouse button must be released in between each shot
                 if (mouse.LeftButton == ButtonState.Released && !gunLoaded && !loadedProjectile.Equals(none))
@@ -1186,6 +1253,7 @@ namespace Game1
                         break;
 
                     case 'G':
+                        // Line: (Type, Tile, Direction, Instruction List)
                         string newGuardInstuctions;
                         NPC newPawnGuard = new NPC(pawn, actorStartingTile, pawn.moveSpeed, initialAngle);
                         guards.Add(newPawnGuard);

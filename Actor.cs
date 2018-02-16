@@ -298,5 +298,17 @@ namespace Game1
                 parentActor = this;
             }
         }
+
+        public bool collidesWith(Actor otherActor)
+        {
+            if (collisionHitbox.Intersects(otherActor.collisionHitbox))
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
     }
 }

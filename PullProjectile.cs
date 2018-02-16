@@ -14,6 +14,7 @@ namespace Game1
         double pullStartSeconds;
         double currentSeconds;
         float pullAnimationLength;
+        public static bool inUse { get; private set; } = false; // only one pull projectile allowed at once
 
         public PullProjectile(ActorModel projectileModel, Vector3 startPosition, int movementSpeed, float angleOfFire) : 
             base (ProjectileClassification.pull, projectileModel, startPosition, movementSpeed, angleOfFire)
@@ -22,6 +23,7 @@ namespace Game1
             actionEffectMaximumArea = new BoundingSphere(startPosition, modelData.boxSize.X * 10);
 
             pullAnimationLength = 0.5f;
+            inUse = true;
         }
 
         public override void move(Vector3? changeInPosition = null)
@@ -40,6 +42,7 @@ namespace Game1
                 if (currentSeconds > pullStartSeconds + pullAnimationLength)
                 {
                     requiresDeletion = true;
+                    inUse = false;
                 }
             }
 

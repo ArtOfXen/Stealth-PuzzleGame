@@ -38,7 +38,15 @@ namespace Game1
         {
             if (!MovementBlocked)
             {
-                displace(new Vector3((float)Math.Sin(MathHelper.ToRadians(currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(currentYawAngleDeg))));
+                if (changeInPosition == null)
+                {
+                    displace(new Vector3((float)Math.Sin(MathHelper.ToRadians(currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(currentYawAngleDeg))));
+                }
+                else
+                {
+                    Vector3 displacement = changeInPosition ?? default(Vector3);
+                    displace(displacement);
+                }
             }
         }
 
@@ -58,9 +66,9 @@ namespace Game1
             return actionStarted;
         }
 
-        public bool enemyInActionRadius(BoundingBox enemyHitbox)
+        public bool actorInActionRadius(BoundingBox actorHitbox)
         {
-            if (enemyHitbox.Intersects(actionEffectMaximumArea) && !enemyHitbox.Intersects(actionEffectMinimumArea))
+            if (actorHitbox.Intersects(actionEffectMaximumArea) && !actorHitbox.Intersects(actionEffectMinimumArea))
             {
                 return true;
             }
