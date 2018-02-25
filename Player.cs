@@ -18,15 +18,15 @@ namespace Game1
 
         public override void move(Vector3? changeInPosition)
         {
-            Vector3 displacement = changeInPosition ?? default(Vector3); // converts Vector3Nullable to Vector3
-
-            if (!wouldCollideWithTerrain(position + (speed * displacement)) && !Falling)
+            if (!currentlyPulledDownByGravity())
             {
-                displace(displacement);
-            }
+                Vector3 displacement = changeInPosition ?? default(Vector3); // converts Vector3Nullable to Vector3
 
-            base.move();
-            
+                if (!wouldCollideWithTerrain(position + (speed * displacement)) && !Falling)
+                {
+                    displace(displacement);
+                }
+            }
         }
     }
 }

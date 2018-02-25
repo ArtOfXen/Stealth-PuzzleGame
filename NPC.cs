@@ -38,7 +38,6 @@ namespace Game1
         public bool chasingPlayer;
 
         EnemyClassification classification;
-        ActorModel alertActorType;
         ProjectileEffectiveness projectileEffectiveness;
 
         double waitStart;
@@ -57,12 +56,11 @@ namespace Game1
         public Tile currentTile;
         Tile destinationTile;
 
-        public NPC(EnemyStruct enemyStruct, Tile startingTile, int movementSpeed, float initialAngle) : base(enemyStruct.unalertModel, new Vector3(startingTile.centre.X, 0f, startingTile.centre.Z), movementSpeed)
+        public NPC(EnemyStruct enemyStruct, Tile startingTile, int movementSpeed, float initialAngle) : base(enemyStruct.model, new Vector3(startingTile.centre.X, 0f, startingTile.centre.Z), movementSpeed)
         {
             dead = false;
             detectionArea = new List<BoundingSphere>();
             classification = enemyStruct.classification;
-            alertActorType = enemyStruct.alertModel;
             projectileEffectiveness = enemyStruct.projectileEffectiveness;
             instructionList = new List<Instruction>();
             originalInstructionList = new List<Instruction>();
@@ -273,8 +271,7 @@ namespace Game1
 
         public void setEnemyType(EnemyStruct newStruct)
         {
-            modelData = newStruct.unalertModel;
-            alertActorType = newStruct.alertModel;
+            modelData = newStruct.model;
             classification = newStruct.classification;
         }
 
@@ -555,7 +552,6 @@ namespace Game1
         public void detectPlayer()
         {
             chasingPlayer = true;
-            modelData = alertActorType;
         }
 
         public bool isEffectedBy(ProjectileClassification p)

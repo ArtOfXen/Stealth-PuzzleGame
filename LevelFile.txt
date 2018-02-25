@@ -1,10 +1,9 @@
 OOOOOOO
+O OOO O
 O     O
-O     O
-O     O
-OE    O
+O OOO O
+O    EO
 OOOOOOO
-~1;2;
-#P;1,1;u;
-#H;3,2;r;N;0,0;t;t;3;0;
-#H;3,4;d;N;0,0;t;f;0;1;
+~1;2;3;
+#P;2,2;u;
+#H;3,2;r;P;5,2;T;T;0;0;

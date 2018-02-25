@@ -9,19 +9,6 @@ namespace Game1
 {
     class VariableObstacle : Actor
     {
-
-        /*
-         * 
-         * 
-         * 
-         * 
-         * need a way to turn off collision hitbox of variable obstacles
-         * 
-         * 
-         * 
-         * 
-         */
-
         private bool active;
         private bool initiallyActive;
         private double lastIntervalTime;
@@ -38,7 +25,7 @@ namespace Game1
             }
         }
 
-        public void update()
+        public virtual void update()
         {
             if (intervalTimer == null)
             {
@@ -54,7 +41,24 @@ namespace Game1
             }
         }
 
-        public void changeActiveStatus()
+        public override void updateHitboxes()
+        {
+            if (active)
+            {
+                base.updateHitboxes();
+            }
+            else
+            {
+                // place hitboxes outside of the level to prevent them from being used
+                foreach (Actor a in attachedActors)
+                {
+                    a.collisionHitbox = new BoundingBox(new Vector3(-500f, -500f, -500f), new Vector3(-500f, -500f, -500f));
+                    a.underfootHitbox = new BoundingBox(new Vector3(-500f, -500f, -500f), new Vector3(-500f, -500f, -500f));
+                }
+            }
+        }
+
+        public virtual void changeActiveStatus()
         {
 
             /* 

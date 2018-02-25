@@ -41,5 +41,24 @@ namespace Game1
         {
             active = isActive;
         }
+
+        public bool currentlyUsesSprite(Texture2D comparisonSprite)
+        {
+            if (comparisonSprite == null || sprite == null)
+            {
+                if (comparisonSprite == null && sprite == null)
+                { return true; }
+                else
+                { return false; }
+            }
+            if (sprite.Equals(comparisonSprite))
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
     }
 }

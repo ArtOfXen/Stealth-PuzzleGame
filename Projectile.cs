@@ -13,7 +13,8 @@ namespace Game1
     {
         none,
         shock, // kills unarmoured enemies
-        pull // pulls enemies towards the projectile when action activated
+        pull, // pulls enemies towards the projectile when action activated
+        teleport // when activated, instantly moves player to location of this projectile
     };
 
 

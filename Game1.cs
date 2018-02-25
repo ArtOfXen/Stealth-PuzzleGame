@@ -10,7 +10,18 @@ using System.IO;
 
 // PRIORITY
 
-// create 'inUse' UI for pull projectile, reminding player to right-click to use it
+// Main menu / Help Screen
+// program in game over conditions - reset level
+// program in level packs / multiple levels
+// make goal send player to next level
+// save progress through level pack - just add an 'unlocked' bool to each level
+// load new level packs
+
+// art and textures
+
+// Boulder Hazard. Essentially replaces armoured guard. Has a patrol path, kills enemies / players it runs over
+// could just make this an enemy with a very short vision radius
+// A hazard similar to boulder hazard, but doesn't move unless triggered, then moves until it collides with something then stops. Used to block / unblock passages as well as kill
 
 // SECONDARY
 // set pull to pull things to tile it is on, instead of its position
@@ -19,12 +30,11 @@ using System.IO;
 
 // NPCs need to find their way back on track after getting pulled away
 // After move instruction is complete, check coordinates against where it should be in patrol path
-// Projectile firing hazard (wall darts)
 
 // OTHER
 // moving platforms (patrol like enemies)
-// would have to move things on top of them as well
-// if character.underfootHitbox collides with moving platform, then move character when platform moves
+    // would have to move things on top of them as well
+    // if character.underfootHitbox collides with moving platform, then move character when platform moves
 
 
 
@@ -37,18 +47,18 @@ namespace Game1
     {
         public bool shock;
         public bool pull;
+        public bool teleport;
         // swap? swaps two actors around
         // clear fog?
         // drone? overhead camera follows last fired drone projectile
-        // power? Turns on electrical hazards or activates consoles
+        // power? Turns on electrical hazards or activates consoles - replace shock with this
         // teleport? moves player to projectile's position on right click
     }
 
     public struct EnemyStruct
     {
         public EnemyClassification classification;
-        public ActorModel unalertModel;
-        public ActorModel alertModel;
+        public ActorModel model;
         public ProjectileEffectiveness projectileEffectiveness;
         public int moveSpeed;
     }
@@ -58,11 +68,14 @@ namespace Game1
         public ProjectileClassification classification;
         public ActorModel model;
         public int moveSpeed;
+        public int index;
         public bool allowedThisLevel;
-        public Texture2D selectedUI;
-        public Texture2D unselectedUI;
-        public Texture2D unavailableUI;
-        public UI ui;
+        public bool hasSecondaryFire;
+        public bool secondaryFireAvailable;
+        public Texture2D uiTextTexture;
+        public UI uiBackground;
+        public UI uiText;
+        public UI uiMouseButtons;
     }
 
     public struct Tile
@@ -98,14 +111,31 @@ namespace Game1
         float screenCentreY;
 
         bool gunLoaded;
+        bool rightMouseButtonDown;
 
         public static Direction north, south, west, east, northWest, northEast, southWest, southEast;
+
+        Texture2D unselectedProjectileUITexture;
+        Texture2D selectedProjectileUITexture;
+        Texture2D unavailableProjectileUITexture;
+
+        Texture2D primaryFireAvailableUITexture;
+        Texture2D primaryFireUsedUITexture;
+        Texture2D secondaryFireAvailableUITexture;
+        Texture2D secondayFireUsedUITexture;
+
+        Texture2D viewUIFirstPersonTexture;
+        Texture2D viewUIBirdsEyeTexture;
+        Texture2D gameOverTexture;
+        Texture2D goalFoundTexture;
 
         ActorModel cube;
         ActorModel playerModel;
         ActorModel goalModel;
         ActorModel wall;
         ActorModel electricBeams;
+        ActorModel dart;
+        ActorModel dartWalls;
         ActorModel gateWalls;
         ActorModel floorModel;
         ActorModel floorSegmentModel;
@@ -118,6 +148,7 @@ namespace Game1
         ProjectileStruct none;
         ProjectileStruct shock;
         ProjectileStruct pull;
+        ProjectileStruct teleport;
 
         EnemyStruct pawn;
         EnemyStruct armoured;
@@ -138,17 +169,16 @@ namespace Game1
         List<Projectile> allProjectiles;
         List<NPC> guards;
         List<Hazard> hazards;
+        List<DartSpawner> dartSpawners;
         List<ProjectileActivatedTrigger> projectileActivatedTriggers;
         List<TimeActivatedTrigger> timeActivatedTriggers;
         List<MovementActivatedTrigger> movementActivatedTriggers;
 
-        ProjectileStruct loadedProjectile;
+        int loadedProjectileIndex;
 
+        UI viewUI;
         UI gameOverUI;
         UI goalFoundUI;
-
-        Texture2D gameOverTexture;
-        Texture2D goalFoundTexture;
 
         struct Bounds
         {
@@ -218,10 +248,19 @@ namespace Game1
             shock.classification = ProjectileClassification.shock;
             shock.moveSpeed = 16;
             shock.allowedThisLevel = false;
+            shock.hasSecondaryFire = false;
             
             pull.classification = ProjectileClassification.pull;
             pull.moveSpeed = 12;
             pull.allowedThisLevel = false;
+            pull.hasSecondaryFire = true;
+            pull.secondaryFireAvailable = false;
+
+            teleport.classification = ProjectileClassification.teleport;
+            teleport.moveSpeed = 8;
+            teleport.allowedThisLevel = false;
+            teleport.hasSecondaryFire = true;
+            teleport.secondaryFireAvailable = false;
             
             levelLayout = new List<string>();
             levelActors = new List<string>();
@@ -273,6 +312,9 @@ namespace Game1
                                     case 2:
                                         pull.allowedThisLevel = true;
                                         break;
+                                    case 3:
+                                        teleport.allowedThisLevel = true;
+                                        break;
                                     default:
                                         break;
                                 }
@@ -307,40 +349,46 @@ namespace Game1
             floor = new List<Actor>();
             guards = new List<NPC>();
             hazards = new List<Hazard>();
+            dartSpawners = new List<DartSpawner>();
             levelTiles = new List<Tile>();
             projectileActivatedTriggers = new List<ProjectileActivatedTrigger>();
             timeActivatedTriggers = new List<TimeActivatedTrigger>();
             movementActivatedTriggers = new List<MovementActivatedTrigger>();
 
-            if (shock.allowedThisLevel)
-            {
-                shock.ui = new UI(shock.unselectedUI, new Vector2(screenCentreX - 100f, GraphicsDevice.Viewport.Height - 100f), 3f, true);
-            }
-            else
-            {
-                shock.ui = new UI(shock.unavailableUI, new Vector2(screenCentreX - 100f, GraphicsDevice.Viewport.Height - 100f), 3f, true);
-            }
-
-            if (pull.allowedThisLevel)
-            {
-                pull.ui = new UI(pull.unselectedUI, new Vector2(screenCentreX + 100f, GraphicsDevice.Viewport.Height - 100f), 3f, true);
-            }
-            else
-            {
-                pull.ui = new UI(pull.unavailableUI, new Vector2(screenCentreX + 100f, GraphicsDevice.Viewport.Height - 100f), 3f, true);
-            }
-
-            numberOfProjectileTypes = Enum.GetNames(typeof(ProjectileClassification)).Length - 1;
+            numberOfProjectileTypes = Enum.GetNames(typeof(ProjectileClassification)).Length;
             projectileTypes = new ProjectileStruct[numberOfProjectileTypes];
 
-            projectileTypes[0] = shock;
-            projectileTypes[1] = pull;
+            none.index = 0;
+            projectileTypes[0] = none;
+            shock.index = 1;
+            projectileTypes[1] = shock;
+            pull.index = 2;
+            projectileTypes[2] = pull;
+            teleport.index = 3;
+            projectileTypes[3] = teleport;
 
+            for (int i = 1; i < numberOfProjectileTypes; i++)
+            {
+                Vector2 position = new Vector2(GraphicsDevice.Viewport.Width * ((float)(i) / (float)(numberOfProjectileTypes)), GraphicsDevice.Viewport.Height - 100f);
+                projectileTypes[i].uiBackground = new UI(unselectedProjectileUITexture, position, 3f, true);
+                projectileTypes[i].uiMouseButtons = new UI(null, position, 3f, true);
+                if (projectileTypes[i].allowedThisLevel)
+                {
+                    projectileTypes[i].uiText = new UI(projectileTypes[i].uiTextTexture, position, 3f, true);
+                }
+                else
+                {
+                    projectileTypes[i].uiText = new UI(unavailableProjectileUITexture, position, 3f, true);
+                }
+            }
+
+            viewUI = new UI(viewUIFirstPersonTexture, new Vector2(viewUIFirstPersonTexture.Width * (2), viewUIFirstPersonTexture.Height * (2)), 3f, true);
             gameOverUI = new UI(gameOverTexture, new Vector2(screenCentreX, screenCentreY), 2f, false);
             goalFoundUI = new UI(goalFoundTexture, new Vector2(screenCentreX, screenCentreY), 2f, false);
 
             gunLoaded = true;
-            loadedProjectile = none;
+            loadedProjectileIndex = 0;
+            rightMouseButtonDown = false;
 
             allProjectiles = new List<Projectile>();
 
@@ -379,7 +427,7 @@ namespace Game1
             ActorModel.setWorldMatrix(worldMatrix);
 
             cube = new ActorModel(Content.Load<Model>("Cube"), true, true);
-            playerModel = new ActorModel(Content.Load<Model>("PlayerTemp"), false, false);
+            playerModel = new ActorModel(Content.Load<Model>("PlayerHat"), false, false);
             goalModel = new ActorModel(Content.Load<Model>("Goal"), false, false);
             wall = new ActorModel(Content.Load<Model>("WallSegment"), true, true);
             gateWalls = new ActorModel(Content.Load<Model>("ElectricGateWall"), true, true);
@@ -389,22 +437,32 @@ namespace Game1
             projectileTriggerModel = new ActorModel(Content.Load<Model>("ProjectileTrigger"), true, true);
 
             electricBeams = new ActorModel(Content.Load<Model>("ElectricGateBeams"), false, false);
+            dart = new ActorModel(Content.Load<Model>("Dart"), false, false);
+            dartWalls = new ActorModel(Content.Load<Model>("DartWall"), true, true);
 
             shock.model = new ActorModel(Content.Load<Model>("ShockProjectile"), false, false);
             pull.model = new ActorModel(Content.Load<Model>("PullProjectile"), false, false);
+            teleport.model = new ActorModel(Content.Load<Model>("PortProjectile"), false, false);
 
-            pawn.unalertModel = new ActorModel(Content.Load<Model>("RobotUnalert"), true, true);
-            pawn.alertModel = new ActorModel(Content.Load<Model>("RobotAlert"), true, true);
+            pawn.model = new ActorModel(Content.Load<Model>("Mummy"), true, true);
 
-            armoured.unalertModel = new ActorModel(Content.Load<Model>("ArmouredRobotUnalert"), true, true);
-            armoured.alertModel = new ActorModel(Content.Load<Model>("ArmouredRobotAlert"), true, true);
+            armoured.model = new ActorModel(Content.Load<Model>("ArmouredRobotUnalert"), true, true);
 
-            shock.selectedUI = Content.Load<Texture2D>("UIShockSelected");
-            shock.unselectedUI = Content.Load<Texture2D>("UIShockUnselected");
-            shock.unavailableUI = Content.Load<Texture2D>("UIShockUnavailable");
-            pull.selectedUI = Content.Load<Texture2D>("UIPullSelected");
-            pull.unselectedUI = Content.Load<Texture2D>("UIPullUnselected");
-            pull.unavailableUI = Content.Load<Texture2D>("UIPullUnavailable");
+            shock.uiTextTexture = Content.Load<Texture2D>("UIPowerText");
+            pull.uiTextTexture = Content.Load<Texture2D>("UIPullText");
+            teleport.uiTextTexture = Content.Load<Texture2D>("UIPortText");
+
+            unselectedProjectileUITexture = Content.Load<Texture2D>("UIUnselectedProjectile");
+            selectedProjectileUITexture = Content.Load<Texture2D>("UISelectedProjectile");
+            unavailableProjectileUITexture = Content.Load<Texture2D>("UIUnavailableProjectile");
+
+            primaryFireAvailableUITexture = Content.Load<Texture2D>("UIPrimaryFireAvailable");
+            primaryFireUsedUITexture = Content.Load<Texture2D>("UIPrimaryFireUsed");
+            secondaryFireAvailableUITexture = Content.Load<Texture2D>("UISecondaryFireAvailable");
+            secondayFireUsedUITexture = Content.Load<Texture2D>("UISecondaryFireUsed");
+
+            viewUIFirstPersonTexture = Content.Load<Texture2D>("UIFirstPerson");
+            viewUIBirdsEyeTexture = Content.Load<Texture2D>("UIThirdPerson");
             gameOverTexture = Content.Load<Texture2D>("UIGameOver");
             goalFoundTexture = Content.Load<Texture2D>("UIGoal");
         }
@@ -425,6 +483,8 @@ namespace Game1
             MouseState mouse = Mouse.GetState();
             Projectile activePullProjectile = null;
 
+            hazards.Clear();
+
             // check for exit
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || keyboard.IsKeyDown(Keys.Escape))
                 Exit();
@@ -435,14 +495,17 @@ namespace Game1
                 t.updateHitboxes();
                 enemyVisionBlockers.Add(t);
             }
-            foreach(NPC n in guards)
+            foreach(NPC guard in guards)
             {
-                enemyVisionBlockers.Add(n);
+                enemyVisionBlockers.Add(guard);
             }
-            foreach(Hazard h in hazards)
+
+            foreach (DartSpawner ds in dartSpawners)
             {
-                h.update();
-                enemyVisionBlockers.Add(h);
+                foreach (Hazard dart in ds.getDartList())
+                {
+                    hazards.Add(dart);
+                }
             }
 
             // player updates
@@ -459,7 +522,7 @@ namespace Game1
             foreach (Hazard h in hazards)
             {
                 // hazard / player collision
-                if (h.collidesWith(player) && h.isActive())
+                if (h.collidesWith(player))
                 {
                     gameOverUI.setActive(true);
                 }
@@ -539,13 +602,21 @@ namespace Game1
                     // kill guards who collide with hazards
                     foreach(Hazard h in hazards)
                     {
-                        if (h.collidesWith(g) && h.isActive())
+                        if (h.collidesWith(g))
                         {
                             g.kill();
                         }
                     }
                 }
             }
+
+
+            // hazard and variable obstacles updates
+            foreach(DartSpawner ds in dartSpawners)
+            {
+                ds.update();
+            }
+
 
             // projectile updates
             
@@ -623,7 +694,7 @@ namespace Game1
                     {
                         if (pj.getClassification() == ProjectileClassification.shock && g.isEffectedBy(pj.getClassification()))
                         {
-                            g.kill();
+                            //g.kill();
                             destroyProjectile = true;
                         }
 
@@ -728,23 +799,58 @@ namespace Game1
                 pat.checkResetTimer();
             }
 
+            //projectile action button
 
-            // projectile action button
-            if (mouse.RightButton == ButtonState.Pressed)
+            if (mouse.RightButton == ButtonState.Pressed && mouse.LeftButton == ButtonState.Released)
             {
+                rightMouseButtonDown = true;
+                for (int i = 1; i < numberOfProjectileTypes; i++)
+                {
+                    if (projectileTypes[i].uiMouseButtons.currentlyUsesSprite(secondaryFireAvailableUITexture))
+                    {
+                        projectileTypes[i].secondaryFireAvailable = false;
+                        projectileTypes[i].uiMouseButtons.setSprite(secondayFireUsedUITexture);
+                    }
+                }
+
                 foreach (Projectile p in allProjectiles)
                 {
                     if (!p.Equals(none))
                     {
                         p.startAction();
                     }
+
+                    if (p.getClassification() == ProjectileClassification.teleport)
+                    {
+                        player.setPosition(new Vector3(p.position.X, player.position.Y, p.position.Z));
+                    }
                 }
             }
 
+            if (mouse.RightButton == ButtonState.Released && rightMouseButtonDown)
+            {
+                rightMouseButtonDown = false;
+                for (int i = 1; i < numberOfProjectileTypes; i++)
+                {
+                    if (projectileTypes[i].uiMouseButtons.currentlyUsesSprite(secondayFireUsedUITexture))
+                    {
+                        if (i == loadedProjectileIndex)
+                        {
+                            projectileTypes[i].uiMouseButtons.setSprite(primaryFireAvailableUITexture);
+                        }
+                        else
+                        {
+                            projectileTypes[i].uiMouseButtons.setSprite(null);
+                        }
+                    }
+                }
+            }
 
             // STRATEGIC VIEW
             if (keyboard.IsKeyDown(Keys.Tab))
             {
+                viewUI.setSprite(viewUIBirdsEyeTexture);
+
                 overheadCamTarget = player.position;
                 overheadCamPosition = new Vector3(player.position.X, 1000f, player.position.Z + 1f);
                 overheadProjectionMatrix = Matrix.CreateOrthographic(GraphicsDevice.Viewport.Width * 2, GraphicsDevice.Viewport.Height * 2, 0f, 3000f);
@@ -752,6 +858,7 @@ namespace Game1
 
                 projectionMatrix = overheadProjectionMatrix;
                 viewMatrix = overheadViewMatrix;
+                
 
                 /* 
                  * 
@@ -767,8 +874,10 @@ namespace Game1
             {
                 bool currentAmmoChanged = false;
 
+                viewUI.setSprite(viewUIFirstPersonTexture);
+
                 //set up first person camera
-                firstPersonCamPosition = new Vector3(player.position.X, playerModel.boxSize.Y * 3 / 5 + player.position.Y, player.position.Z);
+                firstPersonCamPosition = new Vector3(player.position.X, player.collisionHitbox.Max.Y, player.position.Z);
                 firstPersonCamTarget = firstPersonCamPosition + Vector3.Transform(new Vector3(0f, 0f, 1f), player.rotation);
 
                 // set up first person matrices
@@ -789,22 +898,52 @@ namespace Game1
 
 
                 // fire gun
-                if (mouse.LeftButton == ButtonState.Pressed && gunLoaded && !loadedProjectile.Equals(none))
+                if (mouse.LeftButton == ButtonState.Pressed && gunLoaded && !projectileTypes[loadedProjectileIndex].Equals(none))
                 {
-                    if (loadedProjectile.Equals(pull) && PullProjectile.inUse == true)
+                    if (projectileTypes[loadedProjectileIndex].hasSecondaryFire && projectileTypes[loadedProjectileIndex].secondaryFireAvailable)
                     {
                         // only one pull projectile allowed to be active at any one time
                     }
                     else
                     {
+                        for (int i = 1; i < numberOfProjectileTypes; i++)
+                        {
+                            if (projectileTypes[i].uiMouseButtons.currentlyUsesSprite(primaryFireAvailableUITexture))
+                            {
+                                projectileTypes[i].uiMouseButtons.setSprite(null);
+                            }
+                        }
+                        projectileTypes[loadedProjectileIndex].uiMouseButtons.setSprite(primaryFireUsedUITexture);
                         gunLoaded = false;
-                        allProjectiles.Add(createNewProjectile(loadedProjectile.classification));
+                        allProjectiles.Add(createNewProjectile(projectileTypes[loadedProjectileIndex].classification));
+                        if (projectileTypes[loadedProjectileIndex].hasSecondaryFire)
+                        {
+                            projectileTypes[loadedProjectileIndex].secondaryFireAvailable = true;
+                        }
                     }
                 }
                 // mouse button must be released in between each shot
-                if (mouse.LeftButton == ButtonState.Released && !gunLoaded && !loadedProjectile.Equals(none))
+                if (mouse.LeftButton == ButtonState.Released && !gunLoaded && !projectileTypes[loadedProjectileIndex].Equals(none))
                 {
                     gunLoaded = true;
+                    for (int i = 1; i < numberOfProjectileTypes; i++)
+                    {
+                        if (projectileTypes[i].secondaryFireAvailable)
+                        {
+                            projectileTypes[i].uiMouseButtons.setSprite(secondaryFireAvailableUITexture);
+                        }
+                        else
+                        {
+                            if (loadedProjectileIndex == i)
+                            {
+                                projectileTypes[loadedProjectileIndex].uiMouseButtons.setSprite(primaryFireAvailableUITexture);
+                            }
+                            else
+                            {
+                                projectileTypes[i].uiMouseButtons.setSprite(null);
+                            }
+                        }
+                    }
                 }
 
                 // KEYBOARD INPUT
@@ -835,27 +974,38 @@ namespace Game1
                 if ((keyboard.IsKeyDown(Keys.D1) || keyboard.IsKeyDown(Keys.NumPad1)) && shock.allowedThisLevel)
                 {
                     currentAmmoChanged = true;
-                    loadedProjectile = shock;
+                    loadedProjectileIndex = shock.index;
                 }
                 if ((keyboard.IsKeyDown(Keys.D2) || keyboard.IsKeyDown(Keys.NumPad2)) && pull.allowedThisLevel)
                 {
                     currentAmmoChanged = true;
-                    loadedProjectile = pull;
+                    loadedProjectileIndex = pull.index;
+                }
+
+                if((keyboard.IsKeyDown(Keys.D3) || keyboard.IsKeyDown(Keys.NumPad3)) && teleport.allowedThisLevel)
+                {
+                    currentAmmoChanged = true;
+                    loadedProjectileIndex = teleport.index;
                 }
 
                 if (currentAmmoChanged)
                 {
-                    for (int i = 0; i < numberOfProjectileTypes; i++)
+                    projectileTypes[loadedProjectileIndex].uiBackground.setSprite(selectedProjectileUITexture);
+                    if (!projectileTypes[loadedProjectileIndex].secondaryFireAvailable)
                     {
-                        if (projectileTypes[i].allowedThisLevel)
+                        projectileTypes[loadedProjectileIndex].uiMouseButtons.setSprite(primaryFireAvailableUITexture);
+                    }
+                    for (int i = 1; i < numberOfProjectileTypes; i++)
+                    {
+                        if (!projectileTypes[i].Equals(projectileTypes[loadedProjectileIndex]))
                         {
-                            if (projectileTypes[i].Equals(loadedProjectile))
+                            if (projectileTypes[i].uiBackground.currentlyUsesSprite(selectedProjectileUITexture))
                             {
-                                projectileTypes[i].ui.setSprite(projectileTypes[i].selectedUI);
+                                projectileTypes[i].uiBackground.setSprite(unselectedProjectileUITexture);
                             }
-                            else
+                            if (!projectileTypes[i].secondaryFireAvailable)
                             {
-                                projectileTypes[i].ui.setSprite(projectileTypes[i].unselectedUI);
+                                projectileTypes[i].uiMouseButtons.setSprite(null);
                             }
                         }
                     }
@@ -885,6 +1035,16 @@ namespace Game1
             foreach(Actor h in hazards)
             {
                 h.draw(viewMatrix, projectionMatrix);
+            }
+
+            foreach(DartSpawner ds in dartSpawners)
+            {
+                List<Hazard> darts = ds.getDartList();
+
+                foreach(Hazard dart in darts)
+                {
+                    dart.draw(viewMatrix, projectionMatrix);
+                }
             }
 
             foreach(Projectile p in allProjectiles)
@@ -923,16 +1083,21 @@ namespace Game1
             // DRAW UI
             spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend);
 
-            for (int i = 0; i < numberOfProjectileTypes; i++)
+            for (int i = 1; i < numberOfProjectileTypes; i++)
             {
-                projectileTypes[i].ui.draw(spriteBatch);
+                projectileTypes[i].uiBackground.draw(spriteBatch);
+                projectileTypes[i].uiText.draw(spriteBatch);
+                if (!projectileTypes[i].uiMouseButtons.currentlyUsesSprite(null))
+                {
+                    projectileTypes[i].uiMouseButtons.draw(spriteBatch);
+                }
             }
 
+            viewUI.draw(spriteBatch);
             gameOverUI.draw(spriteBatch);
             goalFoundUI.draw(spriteBatch);
 
             spriteBatch.End();
-
 
             base.Draw(gameTime);
         }
@@ -987,27 +1152,27 @@ namespace Game1
             npc.createPatrolPath(npcPatrolPath);
         }
 
-        public Tile getTileData(Vector2 tileCoordinates)
-        {
-            foreach(Tile t in levelTiles)
-            {
-                if (t.coordinates.X == tileCoordinates.X && t.coordinates.Y == tileCoordinates.Y)
-                {
-                    return t;
-                }
-            }
+        //public Tile getTileData(Vector2 tileCoordinates)
+        //{
+        //    foreach(Tile t in levelTiles)
+        //    {
+        //        if (t.coordinates.X == tileCoordinates.X && t.coordinates.Y == tileCoordinates.Y)
+        //        {
+        //            return t;
+        //        }
+        //    }
 
-            /*
-             * 
-             * 
-             * 
-             * change this to return tile that the relevant character is standing on
-             * 
-             * 
-             * 
-             */
-            return levelTiles[0];
-        }
+        //    /*
+        //     * 
+        //     * 
+        //     * 
+        //     * change this to return tile that the relevant character is standing on
+        //     * 
+        //     * 
+        //     * 
+        //     */
+        //    return levelTiles[0];
+        //}
 
         // walls have square bases so don't need rotation 
 
@@ -1020,36 +1185,40 @@ namespace Game1
         //    terrain.Add(newWall);
         //}
 
-        public void createShockGate(Vector3 position, bool initiallyActive, double? intervalTimer = null, float rotation = 0)
+        public void createDartSpawner(Vector3 position, bool initiallyActive, double? intervalTimer = null, float rotation = 0)
         {
-            Hazard newShockGate = new Hazard(electricBeams, position, initiallyActive, intervalTimer);
-            newShockGate.changeYaw(MathHelper.ToRadians(rotation));
+            Actor dartSpawningWall = new Actor(dartWalls, new Vector3(position.X + (tileSize / 2), 0f, position.Z));
+            Actor otherWall = new Actor(dartWalls, new Vector3(position.X - (tileSize / 2), 0f, position.Z));
+            dartSpawningWall.changeYaw(MathHelper.ToRadians(180));
 
-            // left wall
-            newShockGate.attachNewActor(gateWalls, new Vector3(-newShockGate.getModelData().boxExtents.X * (float)Math.Cos(MathHelper.ToRadians(rotation)), 0f, -newShockGate.getModelData().boxExtents.X * (float)Math.Sin(MathHelper.ToRadians(rotation))), MathHelper.ToRadians(rotation));
-            // right wall
-            newShockGate.attachNewActor(gateWalls, new Vector3(newShockGate.getModelData().boxExtents.X * (float)Math.Cos(MathHelper.ToRadians(rotation)), 0f, newShockGate.getModelData().boxExtents.X * (float)Math.Sin(MathHelper.ToRadians(rotation))), MathHelper.ToRadians(rotation));
+            dartSpawningWall.getModelData().resizeHitbox(new Vector3(0.5f, 1f, 1f));
+            otherWall.getModelData().resizeHitbox(new Vector3(0.5f, 1f, 1f));
 
-            hazards.Add(newShockGate);
+            terrain.Add(dartSpawningWall);
+            terrain.Add(otherWall);
 
-            for(int i = 1; i <newShockGate.numberOfAttachedActors(); i++)
-            {
-                newShockGate.getAttachedActor(i).getModelData().resizeHitbox(new Vector3(0.5f, 1f, 1f)); // shrink attached walls, otherwise they interfere with shock gate collision detection
-                terrain.Add(newShockGate.getAttachedActor(i));
-            }
+            DartSpawner newDartSpawner = new DartSpawner(floorModel, position, dartSpawningWall, otherWall, dart);
+
+            newDartSpawner.changeYaw(MathHelper.ToRadians(rotation));
+
+            dartSpawners.Add(newDartSpawner);
         }
 
         public Projectile createNewProjectile(ProjectileClassification classToAdd)
         {
             Projectile newProjectile;
 
-            Vector3 projectilePos = player.position + new Vector3(0f, playerModel.boxExtents.Y, 0f);
+            Vector3 projectilePos = player.position + new Vector3(0f, 100f, 0f);
             float projectileAngle = player.currentYawAngleDeg;
 
             switch (classToAdd)
             {
                 case ProjectileClassification.pull:
                     newProjectile = new PullProjectile(pull.model, projectilePos, pull.moveSpeed, projectileAngle);
+                    break;
+
+                case ProjectileClassification.teleport:
+                    newProjectile = new TeleportProjectile(teleport.model, projectilePos, teleport.moveSpeed, projectileAngle);
                     break;
 
                 default:
@@ -1204,7 +1373,14 @@ namespace Game1
                             intervalTimer = Double.Parse(splitLine[8]);
                         }
 
-                        createShockGate(actorStartingTile.centre, initiallyActive, intervalTimer, initialAngle);
+                        /*
+                         * 
+                         * 
+                         * change this to dart gate
+                         * 
+                         * 
+                         */
+                        createDartSpawner(actorStartingTile.centre, initiallyActive, intervalTimer, initialAngle);
 
                         if (splitLine[3] != "N")
                         {
@@ -1241,12 +1417,12 @@ namespace Game1
 
                             if (splitLine[3] == "P")
                             {
-                                ProjectileActivatedTrigger pat = new ProjectileActivatedTrigger(projectileTriggerModel, triggerTile.centre, hazards[hazards.Count - 1], canBeReactivated, ProjectileClassification.shock, intervalTimer, resetTimer);
+                                ProjectileActivatedTrigger pat = new ProjectileActivatedTrigger(projectileTriggerModel, triggerTile.centre, dartSpawners[dartSpawners.Count - 1], canBeReactivated, ProjectileClassification.shock, intervalTimer, resetTimer);
                                 projectileActivatedTriggers.Add(pat);
                             }
                             else if (splitLine[3] == "M")
                             {
-                                MovementActivatedTrigger mat = new MovementActivatedTrigger(movementTriggerModel, triggerTile.centre, hazards[hazards.Count - 1], canBeReactivated, intervalTimer, resetTimer);
+                                MovementActivatedTrigger mat = new MovementActivatedTrigger(movementTriggerModel, triggerTile.centre, dartSpawners[dartSpawners.Count - 1], canBeReactivated, intervalTimer, resetTimer);
                                 movementActivatedTriggers.Add(mat);
                             }
                         }

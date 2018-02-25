@@ -58,15 +58,30 @@ namespace Game1
 
         public virtual void move(Vector3? changeInPosition = null)
         {
+            if (!currentlyPulledDownByGravity())
+            {
+                Vector3 displacement = changeInPosition ?? default(Vector3);
+                displace(displacement);
+            }
+        }
+
+        public bool currentlyPulledDownByGravity()
+        {
             if (Falling)
             {
                 speed = Vector3.Down; // unable to move left or right anymore, only down
                 displace(new Vector3(0f, velocityDueToGravity, 0f));
                 velocityDueToGravity++;
+                return true;
+            }
+            else
+            {
+                return false;
             }
         }
 
         public bool Falling { get; set; }
+        public bool IsAffectedByGravity { get; set; }
 
         public static void setMovementBlockers(List<Actor>newListOfMovementBlockers)
         {
