@@ -11,6 +11,8 @@ namespace Game1
     class Player : Character
     {
 
+        public float AutoRotationTargetAngle { get; set; }
+
         public Player(ActorModel actorModel, Vector3 startPosition, int movementSpeed) : base(actorModel, startPosition, movementSpeed)
         {
             

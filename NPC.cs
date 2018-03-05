@@ -165,13 +165,13 @@ namespace Game1
             base.move();
         }
 
-        public void changeDirection(bool clockwise)
-        {
-            if (clockwise)
-                currentDirection = currentDirection.nextRightAngleDirectionClockwise;
-            else
-                currentDirection = currentDirection.nextRightAngleDirectionCounterClockwise;
-        }
+        //public void changeDirection(bool clockwise)
+        //{
+        //    if (clockwise)
+        //        currentDirection = currentDirection.nextRightAngleDirectionClockwise;
+        //    else
+        //        currentDirection = currentDirection.nextRightAngleDirectionCounterClockwise;
+        //}
 
         public override void updateHitboxes()
         {

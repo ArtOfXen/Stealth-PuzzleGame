@@ -16,15 +16,16 @@ namespace Game1
             nessecaryProjectile = triggeringProjectile;
         }
 
-        public void hitByProjectile(ProjectileClassification projectileType)
+        public bool affectedByProjectile(ProjectileClassification projectileType)
         {
             if (nessecaryProjectile == projectileType)
             {
                 activateTrigger();
+                return true;
             }
             else
             {
-                
+                return false;
             }
         }
     }

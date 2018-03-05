@@ -48,6 +48,8 @@
     <Compile Include="Direction.cs" />
     <Compile Include="Game1.cs" />
     <Compile Include="Hazard.cs" />
+    <Compile Include="HelpScreen.cs" />
+    <Compile Include="MainMenu.cs" />
     <Compile Include="MovementActivatedTrigger.cs" />
     <Compile Include="NPC.cs" />
     <Compile Include="Player.cs" />
@@ -58,6 +60,7 @@
     <Compile Include="ProjectileActivatedTrigger.cs" />
     <Compile Include="TeleportProjectile.cs" />
     <Compile Include="TimeActivatedTrigger.cs" />
+    <Compile Include="UIButton.cs" />
     <Compile Include="VariableObstacle.cs" />
     <Compile Include="Trigger.cs" />
     <Compile Include="UI.cs" />
@@ -71,7 +74,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Icon.ico" />
-    <Content Include="LevelFile.txt">
+    <Content Include="LevelPacks\LevelFile.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
@@ -79,6 +82,7 @@
     <MonoGameContentReference Include="Content\Content.mgcb" />
     <None Include="app.manifest" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(MSBuildExtensionsPath)\MonoGame\v3.0\MonoGame.Content.Builder.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

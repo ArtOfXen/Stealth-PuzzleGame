@@ -11,12 +11,12 @@ namespace Game1
 {
     class UI
     {
-        Texture2D sprite;
-        Vector2 position;
-        float scale;
-        bool active;
+        protected Texture2D sprite;
+        protected Vector2 position;
+        protected Vector2 scale;
+        protected bool active;
 
-        public UI (Texture2D newSprite, Vector2 newPosition, float newScale, bool initiallyActive)
+        public UI (Texture2D newSprite, Vector2 newPosition, Vector2 newScale, bool initiallyActive)
         {
             sprite = newSprite;
             position = newPosition;
@@ -59,6 +59,21 @@ namespace Game1
             {
                 return false;
             }
+        }
+
+        public Vector2 getPosition()
+        {
+            return position;
+        }
+
+        public float getWidth()
+        {
+            return (sprite.Width * scale.X);
+        }
+
+        public float getHeight()
+        {
+            return (sprite.Height * scale.Y);
         }
     }
 }
