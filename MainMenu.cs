@@ -56,6 +56,7 @@ namespace Game1
                     {
                         if (b.Equals(startButton))
                         {
+
                             return GameState.gameInProgress;
                         }
                         else if (b.Equals(helpButton))

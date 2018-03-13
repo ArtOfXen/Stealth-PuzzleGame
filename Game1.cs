@@ -10,14 +10,11 @@ using System.IO;
 
 // PRIORITY
 
-// program in game over conditions - reset level
-// program in level packs / multiple levels
-// make goal send player to next level
-// save progress through level pack - just add an 'unlocked' bool to each level
+// current npc instructions on level 1 broken - detection also broken, sees player at long range through walls
+// level select screen
 // load new level packs
 
 // art and textures
-// add a roof to first person mode
 // lighting - flashlight for first person? Spotlight for birds eye?
 
 // Boulder Hazard. Essentially replaces armoured guard. Has a patrol path, kills enemies / players it runs over. Not affected by pull.
@@ -62,8 +59,6 @@ namespace Game1
         // swap? swaps two actors around
         // clear fog?
         // drone? overhead camera follows last fired drone projectile
-        // power? Turns on electrical hazards or activates consoles - replace shock with this
-        // teleport? moves player to projectile's position on right click
     }
 
     public struct EnemyStruct
@@ -91,16 +86,8 @@ namespace Game1
 
     public struct Tile
     {
-        /*
-         * change to a class?
-        */
         public Vector2 coordinates;
         public Vector3 centre;
-        // public list<Actor> thingsOnTile;
-        //public Tile nextTileNorth;
-        //public Tile nextTileSouth;
-        //public Tile nextTileEast;
-        //public Tile nextTileWest;
     }
 
     public class Game1 : Game
@@ -110,9 +97,9 @@ namespace Game1
         MainMenu mainMenu;
         HelpScreen helpScreen;
 
-        bool gameOver;
-        double gameOverLength;
-        double gameOverStartTime;
+        bool isLevelOver;
+        double levelResetTimer;
+        double levelEndTime;
 
         GraphicsDeviceManager graphics;
         SpriteBatch spriteBatch;
@@ -180,18 +167,13 @@ namespace Game1
         Actor goal;
 
         string levelPacksFileLocation;
-        string currentLevelPackName;
-
-        List<string> levelLayout;
-        List<string> levelActors;
-        List<string> NPCInstructions;
-        List<int> allowedProjectiles; 
 
         List<Tile> levelTiles;
         float tileSize;
 
         List<Actor> terrain;
         List<Actor> floor;
+        List<Actor> roof;
         List<Projectile> allProjectiles;
         List<NPC> guards;
         List<Hazard> hazards;
@@ -206,15 +188,9 @@ namespace Game1
         UI gameOverUI;
         UI goalFoundUI;
 
-        struct Bounds
-        {
-            public float left;
-            public float right;
-            public float top;
-            public float bottom;
-        }
-
-        Bounds levelBounds;
+        List<Level> currentLevelPack;
+        int currentLevelNumber;
+        int numberOfLevelsInLevelPack;
 
         public Game1()
         {
@@ -290,73 +266,6 @@ namespace Game1
 
             levelPacksFileLocation = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
             levelPacksFileLocation += "..\\..\\..\\..\\..\\LevelPacks";
-            currentLevelPackName = "LevelFile.txt";
-
-            levelLayout = new List<string>();
-            levelActors = new List<string>();
-            NPCInstructions = new List<string>();
-            allowedProjectiles = new List<int>();
-
-            using (var stream = new FileStream(levelPacksFileLocation + "\\" + currentLevelPackName, FileMode.Open))
-            {
-                using (var reader = new StreamReader(stream))
-                {
-                    while (!reader.EndOfStream)
-                    {
-                        string line = reader.ReadLine();
-                        if (line[0] == '#')
-                        {
-                            // remove # sign
-                            string levelActor = line.Remove(0, 1);
-                            levelActors.Add(levelActor);
-                            //NPCInstructions.Add(instructionLine);
-                        }
-                        else if (line[0] == '~')
-                        {
-                            int numOfProjectilesAllowed = 0;
-                            string[] individualInstructions;
-                            string instructionLine = line.Remove(0, 1);
-
-                            allowedProjectiles.Clear();
-
-                            for (int i = 0; i < instructionLine.Length; i++)
-                            {
-                                char c = instructionLine[i];
-                                if (c == ';')
-                                {
-                                    numOfProjectilesAllowed++;
-                                }
-                            }
-
-                            individualInstructions = instructionLine.Split(';');
-
-                            for (int i = 0; i < numOfProjectilesAllowed; i++)
-                            {
-                                int projectileID = Convert.ToInt32(individualInstructions[i]);
-
-                                switch (projectileID)
-                                {
-                                    case 1:
-                                        shock.allowedThisLevel = true;
-                                        break;
-                                    case 2:
-                                        pull.allowedThisLevel = true;
-                                        break;
-                                    case 3:
-                                        teleport.allowedThisLevel = true;
-                                        break;
-                                    default:
-                                        break;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            levelLayout.Add(line);
-                        }
-                    }
-                }
-            }
 
             Mouse.SetPosition((int)screenCentreX, (int)screenCentreY);
             this.IsMouseVisible = false;
@@ -378,16 +287,6 @@ namespace Game1
             player = new Player(playerModel, new Vector3(0f, 0f, 0f), 6);
             goal = new Actor(goalModel, new Vector3(0f, 0f, 150f));
 
-            terrain = new List<Actor>();
-            floor = new List<Actor>();
-            guards = new List<NPC>();
-            hazards = new List<Hazard>();
-            dartSpawners = new List<DartSpawner>();
-            levelTiles = new List<Tile>();
-            projectileActivatedTriggers = new List<ProjectileActivatedTrigger>();
-            timeActivatedTriggers = new List<TimeActivatedTrigger>();
-            movementActivatedTriggers = new List<MovementActivatedTrigger>();
-
             numberOfProjectileTypes = Enum.GetNames(typeof(ProjectileClassification)).Length;
             projectileTypes = new ProjectileStruct[numberOfProjectileTypes];
 
@@ -400,59 +299,14 @@ namespace Game1
             teleport.index = 3;
             projectileTypes[3] = teleport;
 
-            for (int i = 1; i < numberOfProjectileTypes; i++)
-            {
-                Vector2 position = new Vector2(GraphicsDevice.Viewport.Width * ((float)(i) / (float)(numberOfProjectileTypes)), GraphicsDevice.Viewport.Height - 100f);
-                projectileTypes[i].uiBackground = new UI(unselectedProjectileUITexture, position, new Vector2(3f, 3f), true);
-                projectileTypes[i].uiMouseButtons = new UI(null, position, new Vector2(3f, 3f), true);
-                if (projectileTypes[i].allowedThisLevel)
-                {
-                    projectileTypes[i].uiText = new UI(projectileTypes[i].uiTextTexture, position, new Vector2(3f, 3f), true);
-                }
-                else
-                {
-                    projectileTypes[i].uiText = new UI(unavailableProjectileUITexture, position, new Vector2(3f, 3f), true);
-                }
-            }
+            levelResetTimer = 2;
 
             viewUI = new UI(viewUIFirstPersonTexture, new Vector2(viewUIFirstPersonTexture.Width * (2), viewUIFirstPersonTexture.Height * (2)), new Vector2(3f, 3f), true);
             gameOverUI = new UI(gameOverTexture, new Vector2(screenCentreX, screenCentreY), new Vector2(2f, 2f), false);
             goalFoundUI = new UI(goalFoundTexture, new Vector2(screenCentreX, screenCentreY), new Vector2(2f, 2f), false);
 
-            gunLoaded = true;
-            loadedProjectileIndex = 0;
-            rightMouseButtonDown = false;
-
-            allProjectiles = new List<Projectile>();
-
-            levelBounds.top = -GraphicsDevice.Viewport.Height + wall.boxSize.Y;
-            levelBounds.bottom = GraphicsDevice.Viewport.Height - wall.boxSize.Y;
-            levelBounds.left = -GraphicsDevice.Viewport.Width + wall.boxSize.X;
-            levelBounds.right = GraphicsDevice.Viewport.Height - wall.boxSize.X;
-
-            gameOver = false;
-            gameOverLength = 2;
-
-            createLevel(levelLayout, levelActors);
-
-            // if less instructions than guards, add instructions to stand still
-            //while (NPCInstructions.Count < guards.Count)
-            //{
-            //    NPCInstructions.Add("W10;");
-            //}
-
-            //// add instructions to guards
-            //for (int i = 0; i < guards.Count; i++)
-            //{
-            //    if (NPCInstructions[i] == "")
-            //    {
-            //        NPCInstructions[i] = "W10;";
-            //    }
-            //    updateNPCInstructions(guards[i], NPCInstructions[i]);
-                
-            //}
-            // send terrain data to characters
-            Character.setMovementBlockers(terrain);
+            currentLevelPack = loadLevelPack("LevelFile.txt");
+            numberOfLevelsInLevelPack = currentLevelPack.Count;
         }
 
         protected override void LoadContent()
@@ -535,6 +389,9 @@ namespace Game1
                     if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || keyboard.IsKeyDown(Keys.Escape) || currentGameState == GameState.exitgame)
                         Exit();
 
+                    // if level is over, check timer until next level / level reset
+                    updateLevelOverState(goalFoundUI.isActive());
+
                     // update list of enemy vision blockers
                     foreach (Actor t in terrain)
                     {
@@ -561,6 +418,7 @@ namespace Game1
                     // player / end goal collision
                     if (player.collidesWith(goal))
                     {
+                        endLevel(goal);
                         goalFoundUI.setActive(true);
                     }
 
@@ -568,8 +426,9 @@ namespace Game1
                     foreach (Hazard h in hazards)
                     {
                         // hazard / player collision
-                        if (h.collidesWith(player))
+                        if (h.collidesWith(player) && !isLevelOver)
                         {
+                            endLevel(h.getParentActor());
                             gameOverUI.setActive(true);
                         }
                     }
@@ -586,6 +445,8 @@ namespace Game1
                     if (!onFloor)
                     {
                         player.Falling = true;
+                        endLevel(null);
+                        gameOverUI.setActive(true);
                     }
 
                     // guard updates
@@ -615,6 +476,7 @@ namespace Game1
                             if (player.collidesWith(g))
                             {
                                 g.detectPlayer();
+                                endLevel(g);
                                 gameOverUI.setActive(true);
                             }
                             // detect player if collides with area in front of enemy
@@ -625,7 +487,7 @@ namespace Game1
                                     if (player.collisionHitbox.Intersects(b))
                                     {
                                         g.detectPlayer();
-
+                                        endLevel(g);
                                         gameOverUI.setActive(true);
 
                                         /*
@@ -738,19 +600,19 @@ namespace Game1
                         {
                             if (pj.collidesWith(g) && !g.isDead())
                             {
-                                if (pj.getClassification() == ProjectileClassification.shock && g.isEffectedBy(pj.getClassification()))
-                                {
-                                    //g.kill();
-                                    destroyProjectile = true;
-                                }
-
                                 if (pj.getClassification() == ProjectileClassification.pull && !pj.hasActionStarted())
                                 {
+                                    // pull projectiles attach to guards
                                     if (pj.hasNoParentActor())
                                     {
                                         g.attachNewActor(pj);
                                     }
                                     pj.MovementBlocked = true;
+                                }
+                                else
+                                {
+                                    // other projectiles are destroyed
+                                    destroyProjectile = true;
                                 }
 
                                 break;
@@ -867,7 +729,7 @@ namespace Game1
                     }
 
                     //projectile action button
-                    if (!gameOver)
+                    if (!isLevelOver)
                     {
                         if (mouse.RightButton == ButtonState.Pressed && mouse.LeftButton == ButtonState.Released)
                         {
@@ -916,7 +778,7 @@ namespace Game1
                     }
 
                     // STRATEGIC VIEW
-                    if (keyboard.IsKeyDown(Keys.Tab) && !gameOver)
+                    if (keyboard.IsKeyDown(Keys.Tab) && !isLevelOver)
                     {
                         viewUI.setSprite(viewUIBirdsEyeTexture);
 
@@ -957,42 +819,43 @@ namespace Game1
                         projectionMatrix = firstPersonProjectionMatrix;
                         viewMatrix = firstPersonViewMatrix;
 
-                        // MOUSE INPUT
-                        if (mouse.X != screenCentreX)
+                        if (!isLevelOver)
                         {
-                            player.changeYaw(MathHelper.ToRadians(screenCentreX - mouse.X) / 3);
-                        }
-
-                        Mouse.SetPosition((int)screenCentreX, (int)screenCentreY); // set mouse to centre
-
-
-                        // fire gun
-                        if (mouse.LeftButton == ButtonState.Pressed && gunLoaded && !projectileTypes[loadedProjectileIndex].Equals(none))
-                        {
-                            if (projectileTypes[loadedProjectileIndex].hasSecondaryFire && projectileTypes[loadedProjectileIndex].secondaryFireAvailable)
+                            // MOUSE INPUT
+                            if (mouse.X != screenCentreX)
                             {
-                                // only one pull projectile allowed to be active at any one time
+                                player.changeYaw(MathHelper.ToRadians(screenCentreX - mouse.X) / 3);
                             }
-                            else
+
+                            Mouse.SetPosition((int)screenCentreX, (int)screenCentreY); // set mouse to centre
+
+
+                            // fire gun
+                            if (mouse.LeftButton == ButtonState.Pressed && gunLoaded && !projectileTypes[loadedProjectileIndex].Equals(none))
                             {
-                                for (int i = 1; i < numberOfProjectileTypes; i++)
+                                if (projectileTypes[loadedProjectileIndex].hasSecondaryFire && projectileTypes[loadedProjectileIndex].secondaryFireAvailable)
                                 {
-                                    if (projectileTypes[i].uiMouseButtons.currentlyUsesSprite(primaryFireAvailableUITexture))
+                                    // only one pull projectile allowed to be active at any one time
+                                }
+                                else
+                                {
+                                    for (int i = 1; i < numberOfProjectileTypes; i++)
                                     {
-                                        projectileTypes[i].uiMouseButtons.setSprite(null);
+                                        if (projectileTypes[i].uiMouseButtons.currentlyUsesSprite(primaryFireAvailableUITexture))
+                                        {
+                                            projectileTypes[i].uiMouseButtons.setSprite(null);
+                                        }
+                                    }
+                                    projectileTypes[loadedProjectileIndex].uiMouseButtons.setSprite(primaryFireUsedUITexture);
+                                    gunLoaded = false;
+                                    allProjectiles.Add(createNewProjectile(projectileTypes[loadedProjectileIndex].classification));
+                                    if (projectileTypes[loadedProjectileIndex].hasSecondaryFire)
+                                    {
+                                        projectileTypes[loadedProjectileIndex].secondaryFireAvailable = true;
                                     }
                                 }
-                                projectileTypes[loadedProjectileIndex].uiMouseButtons.setSprite(primaryFireUsedUITexture);
-                                gunLoaded = false;
-                                allProjectiles.Add(createNewProjectile(projectileTypes[loadedProjectileIndex].classification));
-                                if (projectileTypes[loadedProjectileIndex].hasSecondaryFire)
-                                {
-                                    projectileTypes[loadedProjectileIndex].secondaryFireAvailable = true;
-                                }
                             }
-                        }
-                        if (!gameOver)
-                        {
+                        
                             // mouse button must be released in between each shot
                             if (mouse.LeftButton == ButtonState.Released && !gunLoaded && !projectileTypes[loadedProjectileIndex].Equals(none))
                             {
@@ -1042,18 +905,18 @@ namespace Game1
 
                             // choose ammo
 
-                            if ((keyboard.IsKeyDown(Keys.D1) || keyboard.IsKeyDown(Keys.NumPad1)) && shock.allowedThisLevel)
+                            if ((keyboard.IsKeyDown(Keys.D1) || keyboard.IsKeyDown(Keys.NumPad1)) && projectileTypes[shock.index].allowedThisLevel)
                             {
                                 currentAmmoChanged = true;
                                 loadedProjectileIndex = shock.index;
                             }
-                            if ((keyboard.IsKeyDown(Keys.D2) || keyboard.IsKeyDown(Keys.NumPad2)) && pull.allowedThisLevel)
+                            if ((keyboard.IsKeyDown(Keys.D2) || keyboard.IsKeyDown(Keys.NumPad2)) && projectileTypes[pull.index].allowedThisLevel)
                             {
                                 currentAmmoChanged = true;
                                 loadedProjectileIndex = pull.index;
                             }
 
-                            if ((keyboard.IsKeyDown(Keys.D3) || keyboard.IsKeyDown(Keys.NumPad3)) && teleport.allowedThisLevel)
+                            if ((keyboard.IsKeyDown(Keys.D3) || keyboard.IsKeyDown(Keys.NumPad3)) && projectileTypes[teleport.index].allowedThisLevel)
                             {
                                 currentAmmoChanged = true;
                                 loadedProjectileIndex = teleport.index;
@@ -1088,6 +951,10 @@ namespace Game1
                 case GameState.mainMenu:
                     this.IsMouseVisible = true;
                     currentGameState = mainMenu.update(mouse);
+                    if (currentGameState == GameState.gameInProgress)
+                    {
+                        resetLevel(currentLevelNumber);
+                    }
                     break;
 
                 case GameState.helpScreen:
@@ -1125,7 +992,7 @@ namespace Game1
                 foreach (Actor f in floor)
                 {
                     f.draw(viewMatrix, projectionMatrix);
-                }
+                }                
 
                 foreach (Actor h in hazards)
                 {
@@ -1167,9 +1034,17 @@ namespace Game1
                     mat.draw(viewMatrix, projectionMatrix);
                 }
 
+                // only draw player in birds eye view
                 if (Keyboard.GetState().IsKeyDown(Keys.Tab))
                 {
                     player.draw(viewMatrix, projectionMatrix);
+                }
+                else // only draw roof in first person view
+                {
+                    foreach (Actor r in roof)
+                    {
+                        r.draw(viewMatrix, projectionMatrix);
+                    }
                 }
 
                 goal.draw(viewMatrix, projectionMatrix);
@@ -1265,39 +1140,6 @@ namespace Game1
             npc.createPatrolPath(npcPatrolPath);
         }
 
-        //public Tile getTileData(Vector2 tileCoordinates)
-        //{
-        //    foreach(Tile t in levelTiles)
-        //    {
-        //        if (t.coordinates.X == tileCoordinates.X && t.coordinates.Y == tileCoordinates.Y)
-        //        {
-        //            return t;
-        //        }
-        //    }
-
-        //    /*
-        //     * 
-        //     * 
-        //     * 
-        //     * change this to return tile that the relevant character is standing on
-        //     * 
-        //     * 
-        //     * 
-        //     */
-        //    return levelTiles[0];
-        //}
-
-        // walls have square bases so don't need rotation 
-
-        //public void createWall(Vector3 position, float rotation = 0)
-        //{
-        //    Actor newWall = new Actor(wall, position);
-
-        //    newWall.changeYaw(MathHelper.ToRadians(rotation));
-
-        //    terrain.Add(newWall);
-        //}
-
         public void createDartSpawner(Vector3 position, bool initiallyActive, double? intervalTimer = null, float rotation = 0)
         {
             Actor dartSpawningWall = new Actor(dartWalls, new Vector3(position.X + (tileSize / 2), 0f, position.Z));
@@ -1342,58 +1184,173 @@ namespace Game1
             return newProjectile;
         }
 
-        public void createLevel(List<string> levelTextRepresentation, List<string> levelActorsTextRepresentation)
+        List<Level> loadLevelPack(string levelPackName)
+        {
+            List<Level> levelPack = new List<Level>();
+            Level level = new Level();
+            bool isFirstLevelOfPack = true;
+
+            using (var stream = new FileStream(levelPacksFileLocation + "\\" + levelPackName, FileMode.Open))
+            {
+                using (var reader = new StreamReader(stream))
+                {
+                    while (!reader.EndOfStream)
+                    {
+                        string line = reader.ReadLine();
+                        
+                        // start of a new level
+                        if (line[0] == '/')
+                        {
+                            string levelName = line.Remove(0, 1);
+                            level.name = levelName;
+
+                            if (isFirstLevelOfPack)
+                            {
+                                level.unlocked = true;
+                                isFirstLevelOfPack = false;
+                            }
+
+                            levelPack.Add(level);
+                            level = new Level();
+                        }
+
+                        // line is part of same level
+                        else
+                        {
+                            if (line[0] == '#')
+                            {
+                                // # adds an actor to the level
+                                string levelActor = line.Remove(0, 1);
+                                level.actors.Add(levelActor);
+                            }
+                            else if (line[0] == '~')
+                            {
+                                // ~ sets allowed projectiles
+                                string[] individualInstructions;
+                                string instructionLine = line.Remove(0, 1);
+
+                                for (int i = 0; i < instructionLine.Length; i++)
+                                {
+                                    char c = instructionLine[i];
+                                    if (c == ';')
+                                    {
+                                        level.numberOfProjectilesAllowed++;
+                                    }
+                                }
+
+                                individualInstructions = instructionLine.Split(';');
+
+                                for (int i = 0; i < level.numberOfProjectilesAllowed; i++)
+                                {
+                                    int projectileID = Convert.ToInt32(individualInstructions[i]);
+                                    level.projectilesAllowed.Add(projectileID);
+                                }
+                            }
+                            else
+                            {
+                                level.layout.Add(line);
+                            }
+                        }
+                    }
+                }
+            }
+
+            currentLevelNumber = 0;
+            return levelPack;
+        }
+
+        public void resetLevel(int levelNumber)
+        {
+            Mouse.SetPosition((int)screenCentreX, (int)screenCentreY);
+            Level thisLevel = currentLevelPack[levelNumber];
+
+            // reset projectiles allowed on level
+            for (int i = 1; i < numberOfProjectileTypes; i++)
+            {
+                projectileTypes[i].allowedThisLevel = false;
+            }
+            foreach (int pa in thisLevel.projectilesAllowed)
+            {
+                projectileTypes[pa].allowedThisLevel = true;
+            }
+
+            terrain = new List<Actor>();
+            floor = new List<Actor>();
+            roof = new List<Actor>();
+            guards = new List<NPC>();
+            hazards = new List<Hazard>();
+            dartSpawners = new List<DartSpawner>();
+            levelTiles = new List<Tile>();
+            projectileActivatedTriggers = new List<ProjectileActivatedTrigger>();
+            timeActivatedTriggers = new List<TimeActivatedTrigger>();
+            movementActivatedTriggers = new List<MovementActivatedTrigger>();
+
+            allProjectiles = new List<Projectile>();
+
+            isLevelOver = false;
+            gameOverUI.setActive(false);
+            goalFoundUI.setActive(false);
+
+            createLevel(thisLevel);
+
+            for (int i = 1; i < numberOfProjectileTypes; i++)
+            {
+                Vector2 position = new Vector2(GraphicsDevice.Viewport.Width * ((float)(i) / (float)(numberOfProjectileTypes)), GraphicsDevice.Viewport.Height - 100f);
+
+                projectileTypes[i].uiBackground = new UI(unselectedProjectileUITexture, position, new Vector2(3f, 3f), true);
+                projectileTypes[i].uiMouseButtons = new UI(null, position, new Vector2(3f, 3f), true);
+                if (projectileTypes[i].allowedThisLevel)
+                {
+                    projectileTypes[i].uiText = new UI(projectileTypes[i].uiTextTexture, position, new Vector2(3f, 3f), true);
+                }
+                else
+                {
+                    projectileTypes[i].uiText = new UI(unavailableProjectileUITexture, position, new Vector2(3f, 3f), true);
+                }
+            }
+
+            gunLoaded = true;
+            loadedProjectileIndex = 0;
+            rightMouseButtonDown = false;
+
+            player.changeYaw(MathHelper.ToRadians(thisLevel.playerStartingAngle));
+
+            Character.setMovementBlockers(terrain);
+        }
+
+        public void createLevel(Level level)
         {
             Tile newTile;
             float zPosition = 0f;
 
+            List<string> levelTextRepresentation = level.layout;
+            List<string> levelActorsTextRepresentation = level.actors;
+
+            // check each row of level
             for (int i = 0; i < levelTextRepresentation.Count; i++)
             {
-                //if (levelTextRepresentation[i].Length % 2 != 0)
-                //{
-                //    levelTextRepresentation[i] += " ";
-                //}
-
+                // check each tile in the row
                 for (int j = 0; j < levelTextRepresentation[i].Length; j++)
                 {
                     float xPosition = (float)(tileSize * j);
                     Vector3 tilePosition = new Vector3(xPosition, 0f, zPosition);
                     char tileContents = levelTextRepresentation[i][j];
-                    //char initialDirection = levelTextRepresentation[i][j + 1];
-                    //float initialAngle;
 
                     newTile.coordinates.X = j;
                     newTile.coordinates.Y = zPosition / tileSize;
                     newTile.centre = new Vector3(xPosition, 0f, zPosition);
 
-                    
+                    roof.Add(new Actor(floorSegmentModel, new Vector3(tilePosition.X, tilePosition.Y + 300f, tilePosition.Z)));
 
                     if (tileContents != 'x') // x = hole in floor
                     {
                         floor.Add(new Actor(floorSegmentModel, tilePosition));
-
+                        
                         switch (tileContents)
                         {
                             case 'O':
                                 terrain.Add(new Actor(wall, tilePosition));
                                 break;
-
-                            //case 'H':
-                            //    createShockGate(tilePosition, true, initialAngle);
-                            //    break;
-
-                            //case 'h':
-                            //    createShockGate(tilePosition, false, initialAngle);
-                            //    break;
-
-                            //case 'P':
-                            //    player.setPosition(tilePosition);
-                            //    player.changeYaw(MathHelper.ToRadians(initialAngle));
-                            //    break;
-
-                            //case 'G':
-                            //    guards.Add(new NPC(pawn, newTile, pawn.moveSpeed, initialAngle));
-                            //    break;
 
                             case 'E':
                                 goal.setPosition(tilePosition);
@@ -1410,6 +1367,7 @@ namespace Game1
                 zPosition += tileSize;
             }
 
+            // check each actor
             for (int i = 0; i < levelActorsTextRepresentation.Count; i++)
             {
                 string[] splitLine;
@@ -1435,6 +1393,7 @@ namespace Game1
 
                 initialDirection = splitLine[2].ToCharArray()[0];
 
+                // convert initial facing direction to an angle
                 switch (initialDirection)
                 {
                     case 'u':
@@ -1456,11 +1415,12 @@ namespace Game1
                 {
                     case 'P':
                         player.setPosition(actorStartingTile.centre);
-                        player.changeYaw(MathHelper.ToRadians(initialAngle));
+                        level.playerStartingAngle = initialAngle;
+                        //player.changeYaw(MathHelper.ToRadians(initialAngle));
                         break;
 
                     case 'H':
-                        // Line: (Type, Tile, Direction, Trigger Type, Trigger Tile, InitiallyActive, CanBeReactivated, ResetTimer, IntervalTimer)
+                        // Line Contents: (Type, Tile, Direction, Trigger Type, Trigger Tile, InitiallyActive, CanBeReactivated, ResetTimer, IntervalTimer)
                         bool initiallyActive;
                         bool canBeReactivated;
                         double? resetTimer, intervalTimer;
@@ -1486,13 +1446,6 @@ namespace Game1
                             intervalTimer = Double.Parse(splitLine[8]);
                         }
 
-                        /*
-                         * 
-                         * 
-                         * change this to dart gate
-                         * 
-                         * 
-                         */
                         createDartSpawner(actorStartingTile.centre, initiallyActive, intervalTimer, initialAngle);
 
                         if (splitLine[3] != "N")
@@ -1566,98 +1519,132 @@ namespace Game1
 
         }
 
-        private void setGameOver(Actor actorWhichKilledPlayer)
+        private void endLevel(Actor triggeringActor)
         {
-            gameOver = true;
-            gameOverStartTime = DateTime.Now.TimeOfDay.TotalSeconds;
-
-            if (actorWhichKilledPlayer != null)
+            if (!isLevelOver)
             {
-                Vector2 playerLookingAt = new Vector2((float)Math.Sin(player.currentYawAngleDeg), (float)Math.Cos(player.currentYawAngleDeg));
-                float targetAngleFromZero;
-                float targetAngleAddition;
-                targetAngleFromZero = (float)Math.Tanh((double)(actorWhichKilledPlayer.position.X - player.position.X)/ (double)(actorWhichKilledPlayer.position.Z - player.position.Z));
+                isLevelOver = true;
+                levelEndTime = DateTime.Now.TimeOfDay.TotalSeconds;
 
-                if (actorWhichKilledPlayer.position.X >= player.position.X)
+                if (triggeringActor != null)
                 {
-                    if (actorWhichKilledPlayer.position.Z >= player.position.Z)
+                    float targetAngleFromZero;
+                    float newLookAtAngle;
+
+                    Vector2 playerToActorVector = new Vector2(triggeringActor.position.X - player.position.X, triggeringActor.position.Z - player.position.Z);
+
+                    targetAngleFromZero = MathHelper.ToDegrees((float)Math.Atan((double)Math.Abs(playerToActorVector.X) / (double)Math.Abs(playerToActorVector.Y)));
+
+                    if (playerToActorVector.Y > 0)
                     {
-                        targetAngleAddition = 0;
+                        if (playerToActorVector.X > 0)
+                        {
+                            newLookAtAngle = targetAngleFromZero;
+                        }
+                        else
+                        {
+                            newLookAtAngle = -targetAngleFromZero;
+                        }
                     }
                     else
                     {
-                        targetAngleAddition = 90;
+                        if (playerToActorVector.X > 0)
+                        {
+                            newLookAtAngle = 180 - targetAngleFromZero;
+                        }
+                        else
+                        {
+                            newLookAtAngle = -180 + targetAngleFromZero;
+                        }
+                    }
+
+
+                    //newLookAtAngle = (targetAngleFromZero + targetAngleAddition) * multiplier;
+                    
+                    player.normaliseAngle(ref newLookAtAngle);
+                    player.AutoRotationTargetAngle = newLookAtAngle;
+                }
+            }
+        }
+
+        private void updateLevelOverState(bool goToNextLevel = false)
+        {
+            if (isLevelOver)
+            {
+                if (DateTime.Now.TimeOfDay.TotalSeconds > levelEndTime + levelResetTimer)
+                {
+                    if (goToNextLevel)
+                    {
+                        currentLevelNumber++;
+                        if (currentLevelNumber >= currentLevelPack.Count)
+                        {
+                            currentGameState = GameState.mainMenu;
+                            currentLevelNumber = 0;
+                            return;
+                        }
+
+                        currentLevelPack[currentLevelNumber].unlocked = true;
+                        resetLevel(currentLevelNumber);
+                    }
+                    else
+                    {
+                        resetLevel(currentLevelNumber);
                     }
                 }
                 else
                 {
-                    if (actorWhichKilledPlayer.position.Z >= player.position.Z)
+                    if (player.currentYawAngleDeg - player.AutoRotationTargetAngle <= -Actor.rotationSpeed || player.currentYawAngleDeg - player.AutoRotationTargetAngle >= Actor.rotationSpeed)
                     {
-                        targetAngleAddition = -90;
+                        // new and current angle both on right of screen, or both on left of screen
+                        if ((player.AutoRotationTargetAngle > 0 && player.currentYawAngleDeg > 0) || (player.AutoRotationTargetAngle <= 0 && player.currentYawAngleDeg <= 0))
+                        {
+                            // counter clockwise rotation
+                            if (player.AutoRotationTargetAngle > player.currentYawAngleDeg)
+                            {
+                                player.changeYaw(MathHelper.ToRadians(Actor.rotationSpeed));
+                            }
+                            // clockwise rotation
+                            else
+                            {
+                                player.changeYaw(MathHelper.ToRadians(-Actor.rotationSpeed));
+                            }
+                        }
+
+                        // new angle on left, current on right
+                        else if (player.AutoRotationTargetAngle <= 0 && player.currentYawAngleDeg > 0)
+                        {
+                            // clockwise if angle difference > 180, else counterclockwise
+                            if (Math.Abs(player.AutoRotationTargetAngle) + player.currentYawAngleDeg >= 180)
+                            {
+                                player.changeYaw(MathHelper.ToRadians(Actor.rotationSpeed));
+                            }
+                            else
+                            {
+                                player.changeYaw(MathHelper.ToRadians(-Actor.rotationSpeed));
+                            }
+                        }
+                        // new angle on right, current on left
+                        else if (player.AutoRotationTargetAngle > 0 && player.currentYawAngleDeg <= 0)
+                        {
+                            // counter if angle difference > 180, else clockwise
+                            if (Math.Abs(player.currentYawAngleDeg) + player.AutoRotationTargetAngle >= 180)
+                            {
+                                player.changeYaw(MathHelper.ToRadians(-Actor.rotationSpeed));
+                            }
+                            else
+                            {
+                                player.changeYaw(MathHelper.ToRadians(Actor.rotationSpeed));
+                            }
+                        }
+                        player.normaliseAngle(ref player.currentYawAngleDeg);
+
                     }
                     else
                     {
-                        targetAngleAddition = -180;
+                        //adawda 
                     }
                 }
-
-                player.AutoRotationTargetAngle = targetAngleFromZero + targetAngleAddition;
             }
         }
-
-        private void updateGameOverState()
-        {
-            // check time
-                // if time up set gameOver = false
-                // reload level
-            // turn towards player.AutoRotationTargetAngle
-        }
-
-
-        //public void buildTestLevel()
-        //{
-        //    createShockGate(new Vector3(500f, 0f, -300f));
-        //    //createWall(new Vector3(500f, 0f, -125f));
-
-        //    guards.Add(new NPC(pawn, new Vector3(-500f, 0f, -500f), pawn.moveSpeed));
-        //    guards.Add(new NPC(armoured, new Vector3(500f, 0f, -500f), armoured.moveSpeed));
-        //    guards.Add(new NPC(pawn, new Vector3(-800f, 0f, -500f), pawn.moveSpeed));
-        //}
-
-        //public void buildStandardLevel()
-        //{
-        //    /// Create a blank level with boundary walls and a floor
-        //    // horizontal terrain creation
-        //    for (int i = 0; i < graphics.PreferredBackBufferWidth + wall.boxSize.X; i += (int)wall.boxSize.X)
-        //    {
-        //        createWall(new Vector3((float)i, 0f, GraphicsDevice.Viewport.Height + wall.boxExtents.Y));
-        //        createWall(new Vector3((float)i, 0f, -GraphicsDevice.Viewport.Height));
-
-        //        // create terrain in negative direction
-        //        // ignore if i==0, otherwise 2 objects created in same place
-        //        if (i != 0)
-        //        {
-        //            createWall(new Vector3((float)-i, 0f, GraphicsDevice.Viewport.Height + wall.boxExtents.Y));
-        //            createWall(new Vector3((float)-i, 0f, -GraphicsDevice.Viewport.Height));
-        //        }
-        //    }
-
-        //    // vertical terrain creation
-        //    for (int i = 0; i < graphics.PreferredBackBufferHeight + wall.boxSize.X; i += (int)wall.boxSize.X)
-        //    {
-        //        createWall(new Vector3(-GraphicsDevice.Viewport.Width, 0f, (float)i), 90);
-        //        createWall(new Vector3(GraphicsDevice.Viewport.Width, 0f, (float)i), 90);
-
-        //        // create terrain in negative direction
-        //        // ignore if i==0, otherwise 2 objects created in same place
-        //        if (i != 0)
-        //        {
-        //            createWall(new Vector3(-GraphicsDevice.Viewport.Width, 0f, (float)-i), 90);
-        //            createWall(new Vector3(GraphicsDevice.Viewport.Width, 0f, (float)-i), 90);
-        //        }
-        //    }
-
-        //    floor = new Actor(floorModel, new Vector3(0f, 0f, 0f));
-        //}
     }
 }

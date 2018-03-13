@@ -42,6 +42,11 @@ namespace Game1
             active = isActive;
         }
 
+        public bool isActive()
+        {
+            return active;
+        }
+
         public bool currentlyUsesSprite(Texture2D comparisonSprite)
         {
             if (comparisonSprite == null || sprite == null)

@@ -17,7 +17,7 @@ namespace Game1
         public ActorModel(Model newModel, bool blocksCharacterMovement, bool blocksEnemyVision)
         {
             model = newModel;
-
+            
             boxSize = calculateBoundingBox();
             boxExtents = boxSize / new Vector3(2f, 2f, 2f);
 

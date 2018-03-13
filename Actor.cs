@@ -19,16 +19,17 @@ namespace Game1
         public float currentYawAngleDeg; // in degrees
         public float currentPitchAngleDeg;
 
+        public const float rotationSpeed = 3f;
+
         protected ActorModel modelData;
-        protected float rotationSpeed;
 
         protected List<Actor> attachedActors; // child actors
         protected Actor parentActor;
+
         public Actor(ActorModel actorModel, Vector3 startPosition)
         {
             modelData = actorModel;
             position = startPosition;
-            rotationSpeed = 3f;
 
             currentYawAngleDeg = Game1.south.getAngleDegrees();
             currentPitchAngleDeg = 0f;

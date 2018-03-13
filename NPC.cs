@@ -26,7 +26,6 @@ namespace Game1
 
     public class NPC : Character
     { 
-        Direction currentDirection;
         public List<BoundingSphere> detectionArea; // vision area
         const int visionRange = 12;
 
