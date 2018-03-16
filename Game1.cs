@@ -10,20 +10,19 @@ using System.IO;
 
 // PRIORITY
 
-// Main menu / Help Screen
-// program in game over conditions - reset level
-// program in level packs / multiple levels
-// make goal send player to next level
-// save progress through level pack - just add an 'unlocked' bool to each level
-// load new level packs
+// falling through floor spazes game out
 
 // art and textures
+// something for a hole instead of just empty space
+// lighting - flashlight for first person? Spotlight for birds eye?
+    // last games programming lab was about lighting effects
 
-// Boulder Hazard. Essentially replaces armoured guard. Has a patrol path, kills enemies / players it runs over
+// Boulder Hazard. Essentially replaces armoured guard. Has a patrol path, kills enemies / players it runs over. Not affected by pull.
 // could just make this an enemy with a very short vision radius
 // A hazard similar to boulder hazard, but doesn't move unless triggered, then moves until it collides with something then stops. Used to block / unblock passages as well as kill
 
 // SECONDARY
+// have to update "last mouse state" stored in each screen class when gameState is changed
 // set pull to pull things to tile it is on, instead of its position
 // pulls things on same row/column as it only
 // change model to demonstrate better
@@ -33,8 +32,8 @@ using System.IO;
 
 // OTHER
 // moving platforms (patrol like enemies)
-    // would have to move things on top of them as well
-    // if character.underfootHitbox collides with moving platform, then move character when platform moves
+// would have to move things on top of them as well
+// if character.underfootHitbox collides with moving platform, then move character when platform moves
 
 
 
@@ -42,6 +41,17 @@ using System.IO;
 
 namespace Game1
 {
+
+    public enum GameState
+    {
+        mainMenu,
+        levelSelectScreen,
+        helpScreen,
+        levelPackScreen,
+        gameInProgress,
+        exitgame
+    };
+
     // struct applied to each enemy type, and dictates which projectile types affect them
     public struct ProjectileEffectiveness
     {
@@ -51,8 +61,6 @@ namespace Game1
         // swap? swaps two actors around
         // clear fog?
         // drone? overhead camera follows last fired drone projectile
-        // power? Turns on electrical hazards or activates consoles - replace shock with this
-        // teleport? moves player to projectile's position on right click
     }
 
     public struct EnemyStruct
@@ -80,20 +88,23 @@ namespace Game1
 
     public struct Tile
     {
-        /*
-         * change to a class?
-        */
         public Vector2 coordinates;
         public Vector3 centre;
-        // public list<Actor> thingsOnTile;
-        //public Tile nextTileNorth;
-        //public Tile nextTileSouth;
-        //public Tile nextTileEast;
-        //public Tile nextTileWest;
     }
 
     public class Game1 : Game
     {
+        GameState currentGameState = GameState.mainMenu;
+
+        MainMenu mainMenu;
+        HelpScreen helpScreen;
+        LevelSelect levelSelectScreen;
+        LevelPackSelect levelPackSelectScreen;
+
+        bool isLevelOver;
+        double levelResetTimer;
+        double levelEndTime;
+
         GraphicsDeviceManager graphics;
         SpriteBatch spriteBatch;
         GameTime gameTime;
@@ -129,6 +140,9 @@ namespace Game1
         Texture2D gameOverTexture;
         Texture2D goalFoundTexture;
 
+        public static Texture2D genericButtonSprite;
+        public static SpriteFont buttonText;
+
         ActorModel cube;
         ActorModel playerModel;
         ActorModel goalModel;
@@ -156,16 +170,14 @@ namespace Game1
         Player player;
         Actor goal;
 
-        List<string> levelLayout;
-        List<string> levelActors;
-        List<string> NPCInstructions;
-        List<int> allowedProjectiles; 
+        static string levelPacksFileLocation;
 
         List<Tile> levelTiles;
         float tileSize;
 
         List<Actor> terrain;
         List<Actor> floor;
+        List<Actor> roof;
         List<Projectile> allProjectiles;
         List<NPC> guards;
         List<Hazard> hazards;
@@ -180,15 +192,9 @@ namespace Game1
         UI gameOverUI;
         UI goalFoundUI;
 
-        struct Bounds
-        {
-            public float left;
-            public float right;
-            public float top;
-            public float bottom;
-        }
-
-        Bounds levelBounds;
+        List<Level> currentLevelPack;
+        static int currentLevelNumber;
+        int numberOfLevelsInLevelPack;
 
         public Game1()
         {
@@ -261,72 +267,9 @@ namespace Game1
             teleport.allowedThisLevel = false;
             teleport.hasSecondaryFire = true;
             teleport.secondaryFireAvailable = false;
-            
-            levelLayout = new List<string>();
-            levelActors = new List<string>();
-            NPCInstructions = new List<string>();
-            allowedProjectiles = new List<int>();
 
-            using (var stream = TitleContainer.OpenStream("LevelFile.txt"))
-            {
-                using (var reader = new StreamReader(stream))
-                {
-                    while (!reader.EndOfStream)
-                    {
-                        string line = reader.ReadLine();
-                        if (line[0] == '#')
-                        {
-                            // remove # sign
-                            string levelActor = line.Remove(0, 1);
-                            levelActors.Add(levelActor);
-                            //NPCInstructions.Add(instructionLine);
-                        }
-                        else if (line[0] == '~')
-                        {
-                            int numOfProjectilesAllowed = 0;
-                            string[] individualInstructions;
-                            string instructionLine = line.Remove(0, 1);
-
-                            allowedProjectiles.Clear();
-
-                            for (int i = 0; i < instructionLine.Length; i++)
-                            {
-                                char c = instructionLine[i];
-                                if (c == ';')
-                                {
-                                    numOfProjectilesAllowed++;
-                                }
-                            }
-
-                            individualInstructions = instructionLine.Split(';');
-
-                            for (int i = 0; i < numOfProjectilesAllowed; i++)
-                            {
-                                int projectileID = Convert.ToInt32(individualInstructions[i]);
-
-                                switch(projectileID)
-                                {
-                                    case 1:
-                                        shock.allowedThisLevel = true;
-                                        break;
-                                    case 2:
-                                        pull.allowedThisLevel = true;
-                                        break;
-                                    case 3:
-                                        teleport.allowedThisLevel = true;
-                                        break;
-                                    default:
-                                        break;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            levelLayout.Add(line);
-                        }
-                    }
-                }
-            }
+            levelPacksFileLocation = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            levelPacksFileLocation += "..\\..\\..\\..\\..\\LevelPacks";
 
             Mouse.SetPosition((int)screenCentreX, (int)screenCentreY);
             this.IsMouseVisible = false;
@@ -342,18 +285,15 @@ namespace Game1
             
             base.Initialize();
 
+            currentLevelPack = new List<Level>();
+
+            mainMenu = new MainMenu(GraphicsDevice, unselectedProjectileUITexture, selectedProjectileUITexture);
+            helpScreen = new HelpScreen(GameState.mainMenu, GraphicsDevice);
+            levelSelectScreen = new LevelSelect(GraphicsDevice, currentLevelPack);
+            levelPackSelectScreen = new LevelPackSelect(GraphicsDevice);
+
             player = new Player(playerModel, new Vector3(0f, 0f, 0f), 6);
             goal = new Actor(goalModel, new Vector3(0f, 0f, 150f));
-
-            terrain = new List<Actor>();
-            floor = new List<Actor>();
-            guards = new List<NPC>();
-            hazards = new List<Hazard>();
-            dartSpawners = new List<DartSpawner>();
-            levelTiles = new List<Tile>();
-            projectileActivatedTriggers = new List<ProjectileActivatedTrigger>();
-            timeActivatedTriggers = new List<TimeActivatedTrigger>();
-            movementActivatedTriggers = new List<MovementActivatedTrigger>();
 
             numberOfProjectileTypes = Enum.GetNames(typeof(ProjectileClassification)).Length;
             projectileTypes = new ProjectileStruct[numberOfProjectileTypes];
@@ -367,56 +307,14 @@ namespace Game1
             teleport.index = 3;
             projectileTypes[3] = teleport;
 
-            for (int i = 1; i < numberOfProjectileTypes; i++)
-            {
-                Vector2 position = new Vector2(GraphicsDevice.Viewport.Width * ((float)(i) / (float)(numberOfProjectileTypes)), GraphicsDevice.Viewport.Height - 100f);
-                projectileTypes[i].uiBackground = new UI(unselectedProjectileUITexture, position, 3f, true);
-                projectileTypes[i].uiMouseButtons = new UI(null, position, 3f, true);
-                if (projectileTypes[i].allowedThisLevel)
-                {
-                    projectileTypes[i].uiText = new UI(projectileTypes[i].uiTextTexture, position, 3f, true);
-                }
-                else
-                {
-                    projectileTypes[i].uiText = new UI(unavailableProjectileUITexture, position, 3f, true);
-                }
-            }
+            levelResetTimer = 2;
 
-            viewUI = new UI(viewUIFirstPersonTexture, new Vector2(viewUIFirstPersonTexture.Width * (2), viewUIFirstPersonTexture.Height * (2)), 3f, true);
-            gameOverUI = new UI(gameOverTexture, new Vector2(screenCentreX, screenCentreY), 2f, false);
-            goalFoundUI = new UI(goalFoundTexture, new Vector2(screenCentreX, screenCentreY), 2f, false);
+            viewUI = new UI(viewUIFirstPersonTexture, new Vector2(viewUIFirstPersonTexture.Width * (2), viewUIFirstPersonTexture.Height * (2)), new Vector2(3f, 3f), true);
+            gameOverUI = new UI(gameOverTexture, new Vector2(screenCentreX, screenCentreY), new Vector2(2f, 2f), false);
+            goalFoundUI = new UI(goalFoundTexture, new Vector2(screenCentreX, screenCentreY), new Vector2(2f, 2f), false);
 
-            gunLoaded = true;
-            loadedProjectileIndex = 0;
-            rightMouseButtonDown = false;
-
-            allProjectiles = new List<Projectile>();
-
-            levelBounds.top = -GraphicsDevice.Viewport.Height + wall.boxSize.Y;
-            levelBounds.bottom = GraphicsDevice.Viewport.Height - wall.boxSize.Y;
-            levelBounds.left = -GraphicsDevice.Viewport.Width + wall.boxSize.X;
-            levelBounds.right = GraphicsDevice.Viewport.Height - wall.boxSize.X;
-
-            createLevel(levelLayout, levelActors);
-
-            // if less instructions than guards, add instructions to stand still
-            //while (NPCInstructions.Count < guards.Count)
-            //{
-            //    NPCInstructions.Add("W10;");
-            //}
-
-            //// add instructions to guards
-            //for (int i = 0; i < guards.Count; i++)
-            //{
-            //    if (NPCInstructions[i] == "")
-            //    {
-            //        NPCInstructions[i] = "W10;";
-            //    }
-            //    updateNPCInstructions(guards[i], NPCInstructions[i]);
-                
-            //}
-            // send terrain data to characters
-            Character.setMovementBlockers(terrain);
+            currentLevelPack = loadLevelPack("Default.txt");
+            numberOfLevelsInLevelPack = currentLevelPack.Count;
         }
 
         protected override void LoadContent()
@@ -465,6 +363,9 @@ namespace Game1
             viewUIBirdsEyeTexture = Content.Load<Texture2D>("UIThirdPerson");
             gameOverTexture = Content.Load<Texture2D>("UIGameOver");
             goalFoundTexture = Content.Load<Texture2D>("UIGoal");
+
+            genericButtonSprite = Content.Load < Texture2D>("UIPurpleBox");
+            buttonText = Content.Load<SpriteFont>("ButtonText");
         }
 
         protected override void UnloadContent()
@@ -474,84 +375,75 @@ namespace Game1
 
         protected override void Update(GameTime gameTime)
         {
-            Vector3 playerDisplacement = new Vector3(0f, 0f, 0f);
-            bool onFloor;
-
-            List<Actor> enemyVisionBlockers = new List<Actor>();
-            List<Projectile> activeProjectiles = new List<Projectile>();
             KeyboardState keyboard = Keyboard.GetState();
             MouseState mouse = Mouse.GetState();
-            Projectile activePullProjectile = null;
 
-            hazards.Clear();
-
-            // check for exit
-            if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || keyboard.IsKeyDown(Keys.Escape))
-                Exit();
-
-            // update list of enemy vision blockers
-            foreach (Actor t in terrain)
+            switch (currentGameState)
             {
-                t.updateHitboxes();
-                enemyVisionBlockers.Add(t);
-            }
-            foreach(NPC guard in guards)
-            {
-                enemyVisionBlockers.Add(guard);
-            }
+                case GameState.gameInProgress:
 
-            foreach (DartSpawner ds in dartSpawners)
-            {
-                foreach (Hazard dart in ds.getDartList())
-                {
-                    hazards.Add(dart);
-                }
-            }
+                    Vector3 playerDisplacement = new Vector3(0f, 0f, 0f);
+                    bool onFloor;
 
-            // player updates
+                    List<Actor> enemyVisionBlockers = new List<Actor>();
+                    List<Projectile> activeProjectiles = new List<Projectile>();
+                    
+                    Projectile activePullProjectile = null;
+                    this.IsMouseVisible = false;
 
-            onFloor = false;
+                    hazards.Clear();
 
-            // player / end goal collision
-            if (player.collidesWith(goal))
-            {
-                goalFoundUI.setActive(true);
-            }
+                    // check for exit
+                    if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || keyboard.IsKeyDown(Keys.Escape) || currentGameState == GameState.exitgame)
+                        Exit();
 
-            player.updateHitboxes();
-            foreach (Hazard h in hazards)
-            {
-                // hazard / player collision
-                if (h.collidesWith(player))
-                {
-                    gameOverUI.setActive(true);
-                }
-            }
+                    // if level is over, check timer until next level / level reset
+                    updateLevelOverState(goalFoundUI.isActive());
 
-            foreach(Actor f in floor)
-            {
-                if (f.collisionHitbox.Intersects(player.underfootHitbox))
-                {
-                    onFloor = true;
-                    break;
-                }
-            }
+                    // update list of enemy vision blockers
+                    foreach (Actor t in terrain)
+                    {
+                        t.updateHitboxes();
+                        enemyVisionBlockers.Add(t);
+                    }
+                    foreach (NPC guard in guards)
+                    {
+                        enemyVisionBlockers.Add(guard);
+                    }
 
-            if (!onFloor)
-            {
-                player.Falling = true;
-            }
+                    foreach (DartSpawner ds in dartSpawners)
+                    {
+                        foreach (Hazard dart in ds.getDartList())
+                        {
+                            hazards.Add(dart);
+                        }
+                    }
 
-            // guard updates
-            foreach (NPC g in guards)
-            {
-                if (!g.isDead())
-                {
+                    // player updates
+
                     onFloor = false;
 
-                    foreach(Actor f in floor)
+                    // player / end goal collision
+                    if (player.collidesWith(goal))
                     {
-                        if (f.collisionHitbox.Intersects(g.underfootHitbox))
+                        endLevel(goal);
+                        goalFoundUI.setActive(true);
+                    }
+
+                    player.updateHitboxes();
+                    foreach (Hazard h in hazards)
+                    {
+                        // hazard / player collision
+                        if (h.collidesWith(player) && !isLevelOver)
+                        {
+                            endLevel(h.getParentActor());
+                            gameOverUI.setActive(true);
+                        }
+                    }
+
+                    foreach (Actor f in floor)
+                    {
+                        if (f.collisionHitbox.Intersects(player.underfootHitbox))
                         {
                             onFloor = true;
                             break;
@@ -560,544 +452,674 @@ namespace Game1
 
                     if (!onFloor)
                     {
-                        g.Falling = true;
-                    }
-
-                    g.update(enemyVisionBlockers);
-
-                    // detect player if collide with enemy
-                    if (player.collidesWith(g))
-                    {
-                        g.detectPlayer();
+                        player.Falling = true;
+                        endLevel(null);
                         gameOverUI.setActive(true);
                     }
-                    // detect player if collides with area in front of enemy
-                    else
-                    {
-                        foreach (BoundingSphere b in g.detectionArea)
-                        {
-                            if (player.collisionHitbox.Intersects(b))
-                            {
-                                g.detectPlayer();
-                                
-                                gameOverUI.setActive(true);
 
+                    // guard updates
+                    foreach (NPC g in guards)
+                    {
+                        if (!g.isDead())
+                        {
+                            onFloor = false;
+
+                            foreach (Actor f in floor)
+                            {
+                                if (f.collisionHitbox.Intersects(g.underfootHitbox))
+                                {
+                                    onFloor = true;
+                                    break;
+                                }
+                            }
+
+                            if (!onFloor)
+                            {
+                                g.Falling = true;
+                            }
+
+                            if (!isLevelOver)
+                            {
+
+                                g.update(enemyVisionBlockers);
+
+                                // detect player if collide with enemy
+                                if (player.collidesWith(g))
+                                {
+                                    g.detectPlayer();
+                                    endLevel(g);
+                                    gameOverUI.setActive(true);
+                                }
+                                // detect player if collides with area in front of enemy
+                                else
+                                {
+                                    foreach (BoundingSphere b in g.detectionArea)
+                                    {
+                                        if (player.collisionHitbox.Intersects(b))
+                                        {
+                                            g.detectPlayer();
+                                            endLevel(g);
+                                            gameOverUI.setActive(true);
+
+                                            /*
+                                             * 
+                                             * 
+                                             * 
+                                             * 
+                                             * 
+                                             * npc reaction to seeing player
+                                             * 
+                                             * 
+                                             * 
+                                             * 
+                                             * 
+                                             */
+                                        }
+                                    }
+                                }
+
+                                // kill guards who collide with hazards
+                                foreach (Hazard h in hazards)
+                                {
+                                    if (h.collidesWith(g))
+                                    {
+                                        g.kill();
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+
+                    // hazard and variable obstacles updates
+                    foreach (DartSpawner ds in dartSpawners)
+                    {
+                        ds.update();
+                    }
+
+
+                    // projectile updates
+
+                    // look for an active pull projectile
+                    foreach (Projectile pj in allProjectiles)
+                    {
+                        if (pj.getClassification() == ProjectileClassification.pull)
+                        {
+                            activePullProjectile = pj;
+                            break;
+                        }
+                    }
+
+                    foreach (Projectile pj in allProjectiles)
+                    {
+                        bool destroyProjectile = false;
+
+                        //if (pj.getClassification() == ProjectileClassification.pull)
+                        //{
+                        //    foreach(Projectile otherPj in allProjectiles)
+                        //    {
+                        //        if (otherPj.Equals(pj))
+                        //        {
+                        //            continue;
+                        //        }
+
+                        //        if (otherPj.collisionHitbox.Intersects(pj.collisionHitbox))
+                        //        {
+                        //            otherPj.requiresDeletion = true;
+                        //            continue;
+                        //        }
+
+                        //        if (pj.hasActionStarted() && pj.actorInActionRadius(otherPj.collisionHitbox))
+                        //        {
+                        //            otherPj.move(new Vector3(pj.position.X - otherPj.position.X, 0f, pj.position.Z - otherPj.position.Z) / 60);
+                        //        }
+                        //    }
+                        //}
+
+                        if (activePullProjectile == null)
+                        {
+                            pj.move();
+                        }
+                        else
+                        {
+                            if (!pj.Equals(activePullProjectile) && pj.collidesWith(activePullProjectile))
+                            {
+                                destroyProjectile = true;
+                            }
+                            else if (!pj.Equals(activePullProjectile) && activePullProjectile.hasActionStarted() && activePullProjectile.actorInActionRadius(pj.collisionHitbox))
+                            {
                                 /*
                                  * 
                                  * 
                                  * 
-                                 * 
-                                 * 
-                                 * npc reaction to seeing player
-                                 * 
-                                 * 
+                                 * don't move at all if in contact with minimum range, or delete immediately
                                  * 
                                  * 
                                  * 
                                  */
+                                pj.move(new Vector3(activePullProjectile.position.X - pj.position.X, 0f, activePullProjectile.position.Z - pj.position.Z) / 60);
+                            }
+                            else
+                            {
+                                pj.move();
+                            }
+                        }
+
+                        pj.updateHitboxes();
+
+                        // projectile / guard collision
+                        foreach (NPC g in guards)
+                        {
+                            if (pj.collidesWith(g) && !g.isDead())
+                            {
+                                if (pj.getClassification() == ProjectileClassification.pull && !pj.hasActionStarted())
+                                {
+                                    // pull projectiles attach to guards
+                                    if (pj.hasNoParentActor())
+                                    {
+                                        g.attachNewActor(pj);
+                                    }
+                                    pj.MovementBlocked = true;
+                                }
+                                else
+                                {
+                                    // other projectiles are destroyed
+                                    destroyProjectile = true;
+                                }
+
+                                break;
+                            }
+
+                            // PULL PROJECTILE SPECIFICS
+                            if (pj.getClassification() == ProjectileClassification.pull && g.isEffectedBy(pj.getClassification()) && pj.hasActionStarted())
+                            {
+                                // in range of enemy when activated
+                                if (pj.actorInActionRadius(g.collisionHitbox))
+                                {
+                                    g.move(new Vector3(pj.position.X - g.position.X, 0f, pj.position.Z - g.position.Z) / 60);
+                                }
+                            }
+                        }
+
+                        // projectile / terrain collision
+                        foreach (Actor t in terrain)
+                        {
+                            if (pj.collidesWith(t))
+                            {
+                                if (pj.getClassification() == ProjectileClassification.pull)
+                                {
+                                    if (pj.hasNoParentActor())
+                                    {
+                                        t.attachNewActor(pj);
+                                    }
+                                    pj.MovementBlocked = true;
+                                }
+
+                                else
+                                {
+                                    destroyProjectile = true;
+                                }
+
+                                break;
+                            }
+                        }
+
+                        foreach (ProjectileActivatedTrigger pat in projectileActivatedTriggers)
+                        {
+                            if (pj.collidesWith(pat))
+                            {
+                                if (pat.affectedByProjectile(pj.getClassification()))
+                                {
+                                    destroyProjectile = true;
+                                }
+                            }
+                        }
+
+                        if (pj.requiresDeletion)
+                        {
+                            destroyProjectile = true;
+                        }
+
+                        // list of projectiles that don't need destroying
+                        if (destroyProjectile == false)
+                        {
+                            activeProjectiles.Add(pj);
+                        }
+                        else
+                        {
+                            pj.detachFromParentActor();
+                            for (int i = 1; i < numberOfProjectileTypes; i++)
+                            {
+                                if (pj.getClassification() == projectileTypes[i].classification)
+                                {
+                                    if (projectileTypes[i].secondaryFireAvailable)
+                                    {
+                                        projectileTypes[i].secondaryFireAvailable = false;
+                                        if (loadedProjectileIndex == projectileTypes[i].index)
+                                        {
+                                            projectileTypes[i].uiMouseButtons.setSprite(primaryFireAvailableUITexture);
+                                        }
+                                        else
+                                        {
+                                            projectileTypes[i].uiMouseButtons.setSprite(null);
+                                        }
+                                    }
+                                    break;
+                                }
                             }
                         }
                     }
 
-                    // kill guards who collide with hazards
-                    foreach(Hazard h in hazards)
+                    // replace list of projectiles with list of projectiles that didn't collide with anything
+                    allProjectiles.Clear();
+                    allProjectiles = activeProjectiles;
+
+                    // check triggers
+
+                    foreach (MovementActivatedTrigger mat in movementActivatedTriggers)
                     {
-                        if (h.collidesWith(g))
+                        mat.checkCurrentlyCollidingCharacter();
+                        mat.checkResetTimer();
+
+                        if (mat.collidesWith(player))
                         {
-                            g.kill();
+                            mat.collisionWithCharacter(player);
+                        }
+
+                        foreach (NPC g in guards)
+                        {
+                            if (mat.collidesWith(g))
+                            {
+                                mat.collisionWithCharacter(g);
+                            }
                         }
                     }
-                }
-            }
 
-
-            // hazard and variable obstacles updates
-            foreach(DartSpawner ds in dartSpawners)
-            {
-                ds.update();
-            }
-
-
-            // projectile updates
-            
-            // look for an active pull projectile
-            foreach (Projectile pj in allProjectiles)
-            {
-                if (pj.getClassification() == ProjectileClassification.pull)
-                {
-                    activePullProjectile = pj;
-                    break;
-                }
-            }
-
-            foreach (Projectile pj in allProjectiles)
-            {
-                bool destroyProjectile = false;
-
-                //if (pj.getClassification() == ProjectileClassification.pull)
-                //{
-                //    foreach(Projectile otherPj in allProjectiles)
-                //    {
-                //        if (otherPj.Equals(pj))
-                //        {
-                //            continue;
-                //        }
-
-                //        if (otherPj.collisionHitbox.Intersects(pj.collisionHitbox))
-                //        {
-                //            otherPj.requiresDeletion = true;
-                //            continue;
-                //        }
-
-                //        if (pj.hasActionStarted() && pj.actorInActionRadius(otherPj.collisionHitbox))
-                //        {
-                //            otherPj.move(new Vector3(pj.position.X - otherPj.position.X, 0f, pj.position.Z - otherPj.position.Z) / 60);
-                //        }
-                //    }
-                //}
-
-                if (activePullProjectile == null)
-                {
-                    pj.move();
-                }
-                else
-                {
-                    if (!pj.Equals(activePullProjectile) && pj.collidesWith(activePullProjectile))
+                    foreach (ProjectileActivatedTrigger pat in projectileActivatedTriggers)
                     {
-                        destroyProjectile = true;
+                        pat.checkResetTimer();
                     }
-                    else if (!pj.Equals(activePullProjectile) && activePullProjectile.hasActionStarted() && activePullProjectile.actorInActionRadius(pj.collisionHitbox))
+
+                    //projectile action button
+                    if (!isLevelOver)
                     {
-                        /*
+                        if (mouse.RightButton == ButtonState.Pressed && mouse.LeftButton == ButtonState.Released)
+                        {
+                            rightMouseButtonDown = true;
+                            for (int i = 1; i < numberOfProjectileTypes; i++)
+                            {
+                                if (projectileTypes[i].uiMouseButtons.currentlyUsesSprite(secondaryFireAvailableUITexture))
+                                {
+                                    projectileTypes[i].secondaryFireAvailable = false;
+                                    projectileTypes[i].uiMouseButtons.setSprite(secondayFireUsedUITexture);
+                                }
+                            }
+
+                            foreach (Projectile p in allProjectiles)
+                            {
+                                if (!p.Equals(none))
+                                {
+                                    p.startAction();
+                                }
+
+                                if (p.getClassification() == ProjectileClassification.teleport)
+                                {
+                                    player.setPosition(new Vector3(p.position.X, player.position.Y, p.position.Z));
+                                }
+                            }
+                        }
+
+                        if (mouse.RightButton == ButtonState.Released && rightMouseButtonDown)
+                        {
+                            rightMouseButtonDown = false;
+                            for (int i = 1; i < numberOfProjectileTypes; i++)
+                            {
+                                if (projectileTypes[i].uiMouseButtons.currentlyUsesSprite(secondayFireUsedUITexture))
+                                {
+                                    if (i == loadedProjectileIndex)
+                                    {
+                                        projectileTypes[i].uiMouseButtons.setSprite(primaryFireAvailableUITexture);
+                                    }
+                                    else
+                                    {
+                                        projectileTypes[i].uiMouseButtons.setSprite(null);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // STRATEGIC VIEW
+                    if (keyboard.IsKeyDown(Keys.Tab) && !isLevelOver)
+                    {
+                        viewUI.setSprite(viewUIBirdsEyeTexture);
+
+                        overheadCamTarget = player.position;
+                        overheadCamPosition = new Vector3(player.position.X, 1000f, player.position.Z + 1f);
+                        overheadProjectionMatrix = Matrix.CreateOrthographic(GraphicsDevice.Viewport.Width * 2, GraphicsDevice.Viewport.Height * 2, 0f, 3000f);
+                        overheadViewMatrix = Matrix.CreateLookAt(overheadCamPosition, overheadCamTarget, new Vector3(0f, 1f, 0f));
+
+                        projectionMatrix = overheadProjectionMatrix;
+                        viewMatrix = overheadViewMatrix;
+
+
+                        /* 
                          * 
                          * 
-                         * 
-                         * don't move at all if in contact with minimum range, or delete immediately
-                         * 
+                         * shrink Y-scale of walls and remove roof to help player visibility
                          * 
                          * 
                          */
-                        pj.move(new Vector3(activePullProjectile.position.X - pj.position.X, 0f, activePullProjectile.position.Z - pj.position.Z) / 60);
                     }
+
+                    // FIRST PERSON VIEW
                     else
                     {
-                        pj.move();
-                    }
-                }
+                        bool currentAmmoChanged = false;
 
-                pj.updateHitboxes();
+                        viewUI.setSprite(viewUIFirstPersonTexture);
 
-                // projectile / guard collision
-                foreach (NPC g in guards)
-                {
-                    if (pj.collidesWith(g) && !g.isDead())
-                    {
-                        if (pj.getClassification() == ProjectileClassification.shock && g.isEffectedBy(pj.getClassification()))
+                        //set up first person camera
+                        firstPersonCamPosition = new Vector3(player.position.X, player.collisionHitbox.Max.Y, player.position.Z);
+                        firstPersonCamTarget = firstPersonCamPosition + Vector3.Transform(new Vector3(0f, 0f, 1f), player.rotation);
+
+                        // set up first person matrices
+                        firstPersonProjectionMatrix = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(135), graphics.PreferredBackBufferWidth / graphics.PreferredBackBufferHeight, playerModel.boxExtents.X, 3000f);
+                        firstPersonViewMatrix = Matrix.CreateLookAt(firstPersonCamPosition, firstPersonCamTarget, new Vector3(0f, 1f, 0f));
+                        worldMatrix = Matrix.CreateWorld(firstPersonCamTarget, Vector3.Forward, Vector3.Up);
+
+                        projectionMatrix = firstPersonProjectionMatrix;
+                        viewMatrix = firstPersonViewMatrix;
+
+                        if (!isLevelOver)
                         {
-                            //g.kill();
-                            destroyProjectile = true;
-                        }
-
-                        if (pj.getClassification() == ProjectileClassification.pull && !pj.hasActionStarted())
-                        {
-                            if (pj.hasNoParentActor())
+                            // MOUSE INPUT
+                            if (mouse.X != screenCentreX)
                             {
-                                g.attachNewActor(pj);
+                                player.changeYaw(MathHelper.ToRadians(screenCentreX - mouse.X) / 3);
                             }
-                            pj.MovementBlocked = true;
+
+                            Mouse.SetPosition((int)screenCentreX, (int)screenCentreY); // set mouse to centre
+
+
+                            // fire gun
+                            if (mouse.LeftButton == ButtonState.Pressed && gunLoaded && !projectileTypes[loadedProjectileIndex].Equals(none))
+                            {
+                                if (projectileTypes[loadedProjectileIndex].hasSecondaryFire && projectileTypes[loadedProjectileIndex].secondaryFireAvailable)
+                                {
+                                    // only one pull projectile allowed to be active at any one time
+                                }
+                                else
+                                {
+                                    for (int i = 1; i < numberOfProjectileTypes; i++)
+                                    {
+                                        if (projectileTypes[i].uiMouseButtons.currentlyUsesSprite(primaryFireAvailableUITexture))
+                                        {
+                                            projectileTypes[i].uiMouseButtons.setSprite(null);
+                                        }
+                                    }
+                                    projectileTypes[loadedProjectileIndex].uiMouseButtons.setSprite(primaryFireUsedUITexture);
+                                    gunLoaded = false;
+                                    allProjectiles.Add(createNewProjectile(projectileTypes[loadedProjectileIndex].classification));
+                                    if (projectileTypes[loadedProjectileIndex].hasSecondaryFire)
+                                    {
+                                        projectileTypes[loadedProjectileIndex].secondaryFireAvailable = true;
+                                    }
+                                }
+                            }
+                        
+                            // mouse button must be released in between each shot
+                            if (mouse.LeftButton == ButtonState.Released && !gunLoaded && !projectileTypes[loadedProjectileIndex].Equals(none))
+                            {
+                                gunLoaded = true;
+                                for (int i = 1; i < numberOfProjectileTypes; i++)
+                                {
+                                    if (projectileTypes[i].secondaryFireAvailable)
+                                    {
+                                        projectileTypes[i].uiMouseButtons.setSprite(secondaryFireAvailableUITexture);
+                                    }
+                                    else
+                                    {
+                                        if (loadedProjectileIndex == i)
+                                        {
+                                            projectileTypes[loadedProjectileIndex].uiMouseButtons.setSprite(primaryFireAvailableUITexture);
+                                        }
+                                        else
+                                        {
+                                            projectileTypes[i].uiMouseButtons.setSprite(null);
+                                        }
+                                    }
+                                }
+                            }
+
+                            // KEYBOARD INPUT
+                            // player move
+                            if ((keyboard.IsKeyDown(Keys.Left) || keyboard.IsKeyDown(Keys.A)) && (keyboard.IsKeyUp(Keys.Right) && keyboard.IsKeyUp(Keys.D)))
+                            {
+                                playerDisplacement += -(new Vector3(2f, 2f, 2f) * new Vector3((float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg - 180)), 0f, (float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg))));
+                            }
+                            if ((keyboard.IsKeyDown(Keys.Right) || keyboard.IsKeyDown(Keys.D)) && (keyboard.IsKeyUp(Keys.Left) && keyboard.IsKeyUp(Keys.A)))
+                            {
+                                playerDisplacement += new Vector3(2f, 2f, 2f) * new Vector3((float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg - 180)), 0f, (float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)));
+                            }
+
+                            if ((keyboard.IsKeyDown(Keys.Up) || keyboard.IsKeyDown(Keys.W)) && (keyboard.IsKeyUp(Keys.Down) && keyboard.IsKeyUp(Keys.S)))
+                            {
+                                playerDisplacement += new Vector3((float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg)));
+                            }
+
+                            if ((keyboard.IsKeyDown(Keys.Down) || keyboard.IsKeyDown(Keys.S)) && (keyboard.IsKeyUp(Keys.Up) && keyboard.IsKeyUp(Keys.W)))
+                            {
+                                playerDisplacement += -(new Vector3((float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg))));
+                            }
+
+                            player.move(playerDisplacement);
+
+                            // choose ammo
+
+                            if ((keyboard.IsKeyDown(Keys.D1) || keyboard.IsKeyDown(Keys.NumPad1)) && projectileTypes[shock.index].allowedThisLevel)
+                            {
+                                currentAmmoChanged = true;
+                                loadedProjectileIndex = shock.index;
+                            }
+                            if ((keyboard.IsKeyDown(Keys.D2) || keyboard.IsKeyDown(Keys.NumPad2)) && projectileTypes[pull.index].allowedThisLevel)
+                            {
+                                currentAmmoChanged = true;
+                                loadedProjectileIndex = pull.index;
+                            }
+
+                            if ((keyboard.IsKeyDown(Keys.D3) || keyboard.IsKeyDown(Keys.NumPad3)) && projectileTypes[teleport.index].allowedThisLevel)
+                            {
+                                currentAmmoChanged = true;
+                                loadedProjectileIndex = teleport.index;
+                            }
                         }
 
-                        break;
-                    }
-
-                    // PULL PROJECTILE SPECIFICS
-                    if (pj.getClassification() == ProjectileClassification.pull && g.isEffectedBy(pj.getClassification()) && pj.hasActionStarted())
-                    {
-                        // in range of enemy when activated
-                        if (pj.actorInActionRadius(g.collisionHitbox))
+                        if (currentAmmoChanged)
                         {
-                           g.move(new Vector3(pj.position.X - g.position.X, 0f, pj.position.Z - g.position.Z) / 60);
+                            projectileTypes[loadedProjectileIndex].uiBackground.setSprite(selectedProjectileUITexture);
+                            if (!projectileTypes[loadedProjectileIndex].secondaryFireAvailable)
+                            {
+                                projectileTypes[loadedProjectileIndex].uiMouseButtons.setSprite(primaryFireAvailableUITexture);
+                            }
+                            for (int i = 1; i < numberOfProjectileTypes; i++)
+                            {
+                                if (!projectileTypes[i].Equals(projectileTypes[loadedProjectileIndex]))
+                                {
+                                    if (projectileTypes[i].uiBackground.currentlyUsesSprite(selectedProjectileUITexture))
+                                    {
+                                        projectileTypes[i].uiBackground.setSprite(unselectedProjectileUITexture);
+                                    }
+                                    if (!projectileTypes[i].secondaryFireAvailable)
+                                    {
+                                        projectileTypes[i].uiMouseButtons.setSprite(null);
+                                    }
+                                }
+                            }
                         }
                     }
-                }
+                    break;
 
-                // projectile / terrain collision
+                case GameState.mainMenu:
+                    this.IsMouseVisible = true;
+                    currentGameState = mainMenu.update(mouse);
+                    break;
+
+                case GameState.helpScreen:
+                    this.IsMouseVisible = true;
+                    currentGameState = helpScreen.update(mouse);
+                    break;
+
+                case GameState.levelSelectScreen:
+                    this.IsMouseVisible = true;
+                    currentGameState = levelSelectScreen.update(mouse);
+                    if (currentGameState == GameState.gameInProgress)
+                    {
+                        resetLevel(currentLevelNumber);
+                    }
+                    break;
+
+                case GameState.levelPackScreen:
+                    this.IsMouseVisible = true;
+                    currentGameState = levelPackSelectScreen.update(mouse);
+                    break;
+
+                default:
+                    if (currentGameState == GameState.exitgame)
+                    {
+                        Exit();
+                    }
+                    break;
+
+            }
+            base.Update(gameTime);
+        
+        }
+
+        protected override void Draw(GameTime gameTime)
+        {
+            switch (currentGameState)
+            {
+            case GameState.gameInProgress:
+                GraphicsDevice.Clear(Color.CornflowerBlue);
+
+                GraphicsDevice.DepthStencilState = new DepthStencilState() { DepthBufferEnable = true }; // allows drawing in 3D
+
+                // DRAW 3D OBJECTS
                 foreach (Actor t in terrain)
                 {
-                    if (pj.collidesWith(t))
+                    t.draw(viewMatrix, projectionMatrix);
+                }
+
+                foreach (Actor f in floor)
+                {
+                    f.draw(viewMatrix, projectionMatrix);
+                }                
+
+                foreach (Actor h in hazards)
+                {
+                    h.draw(viewMatrix, projectionMatrix);
+                }
+
+                foreach (DartSpawner ds in dartSpawners)
+                {
+                    List<Hazard> darts = ds.getDartList();
+
+                    foreach (Hazard dart in darts)
                     {
-                        if (pj.getClassification() == ProjectileClassification.pull)
-                        {
-                            if (pj.hasNoParentActor())
-                            {
-                                t.attachNewActor(pj);
-                            }
-                            pj.MovementBlocked = true;
-                        }
-
-                        else
-                        {
-                            destroyProjectile = true;
-                        }
-
-                        break;
-                    }
-                }
-
-                foreach (ProjectileActivatedTrigger pat in projectileActivatedTriggers)
-                {
-                    if (pj.collidesWith(pat))
-                    {
-                        pat.hitByProjectile(pj.getClassification());
-                        destroyProjectile = true;
-                    }
-                }
-                
-                if (pj.requiresDeletion)
-                {
-                    destroyProjectile = true;
-                }
-
-                // list of projectiles that don't need destroying
-                if (destroyProjectile == false)
-                {
-                    activeProjectiles.Add(pj);
-                }
-                else
-                {
-                    pj.detachFromParentActor();
-                }
-            }
-
-            // replace list of projectiles with list of projectiles that didn't collide with anything
-            allProjectiles.Clear();
-            allProjectiles = activeProjectiles;
-
-            // check triggers
-
-            foreach(MovementActivatedTrigger mat in movementActivatedTriggers)
-            {
-                mat.checkCurrentlyCollidingCharacter();
-                mat.checkResetTimer();
-
-                if (mat.collidesWith(player))
-                {
-                    mat.collisionWithCharacter(player);
-                }
-
-                foreach(NPC g in guards)
-                {
-                    if (mat.collidesWith(g))
-                    {
-                        mat.collisionWithCharacter(g);
-                    }
-                }
-            }
-
-            foreach (ProjectileActivatedTrigger pat in projectileActivatedTriggers)
-            {
-                pat.checkResetTimer();
-            }
-
-            //projectile action button
-
-            if (mouse.RightButton == ButtonState.Pressed && mouse.LeftButton == ButtonState.Released)
-            {
-                rightMouseButtonDown = true;
-                for (int i = 1; i < numberOfProjectileTypes; i++)
-                {
-                    if (projectileTypes[i].uiMouseButtons.currentlyUsesSprite(secondaryFireAvailableUITexture))
-                    {
-                        projectileTypes[i].secondaryFireAvailable = false;
-                        projectileTypes[i].uiMouseButtons.setSprite(secondayFireUsedUITexture);
+                        dart.draw(viewMatrix, projectionMatrix);
                     }
                 }
 
                 foreach (Projectile p in allProjectiles)
                 {
-                    if (!p.Equals(none))
-                    {
-                        p.startAction();
-                    }
+                    p.draw(viewMatrix, projectionMatrix);
+                }
 
-                    if (p.getClassification() == ProjectileClassification.teleport)
+                foreach (NPC g in guards)
+                {
+                    g.draw(viewMatrix, projectionMatrix);
+                }
+
+                foreach (ProjectileActivatedTrigger pat in projectileActivatedTriggers)
+                {
+                    pat.draw(viewMatrix, projectionMatrix);
+                }
+
+                foreach (TimeActivatedTrigger tat in timeActivatedTriggers)
+                {
+                    tat.draw(viewMatrix, projectionMatrix);
+                }
+
+                foreach (MovementActivatedTrigger mat in movementActivatedTriggers)
+                {
+                    mat.draw(viewMatrix, projectionMatrix);
+                }
+
+                // only draw player in birds eye view
+                if (Keyboard.GetState().IsKeyDown(Keys.Tab))
+                {
+                    player.draw(viewMatrix, projectionMatrix);
+                }
+                else // only draw roof in first person view
+                {
+                    foreach (Actor r in roof)
                     {
-                        player.setPosition(new Vector3(p.position.X, player.position.Y, p.position.Z));
+                        r.draw(viewMatrix, projectionMatrix);
                     }
                 }
-            }
 
-            if (mouse.RightButton == ButtonState.Released && rightMouseButtonDown)
-            {
-                rightMouseButtonDown = false;
+                goal.draw(viewMatrix, projectionMatrix);
+
+
+                // DRAW UI
+                spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend);
+
                 for (int i = 1; i < numberOfProjectileTypes; i++)
                 {
-                    if (projectileTypes[i].uiMouseButtons.currentlyUsesSprite(secondayFireUsedUITexture))
+                    projectileTypes[i].uiBackground.draw(spriteBatch);
+                    if (!projectileTypes[i].uiMouseButtons.currentlyUsesSprite(null))
                     {
-                        if (i == loadedProjectileIndex)
-                        {
-                            projectileTypes[i].uiMouseButtons.setSprite(primaryFireAvailableUITexture);
-                        }
-                        else
-                        {
-                            projectileTypes[i].uiMouseButtons.setSprite(null);
-                        }
+                        projectileTypes[i].uiMouseButtons.draw(spriteBatch);
                     }
-                }
-            }
-
-            // STRATEGIC VIEW
-            if (keyboard.IsKeyDown(Keys.Tab))
-            {
-                viewUI.setSprite(viewUIBirdsEyeTexture);
-
-                overheadCamTarget = player.position;
-                overheadCamPosition = new Vector3(player.position.X, 1000f, player.position.Z + 1f);
-                overheadProjectionMatrix = Matrix.CreateOrthographic(GraphicsDevice.Viewport.Width * 2, GraphicsDevice.Viewport.Height * 2, 0f, 3000f);
-                overheadViewMatrix = Matrix.CreateLookAt(overheadCamPosition, overheadCamTarget, new Vector3(0f, 1f, 0f));
-
-                projectionMatrix = overheadProjectionMatrix;
-                viewMatrix = overheadViewMatrix;
-                
-
-                /* 
-                 * 
-                 * 
-                 * shrink Y-scale of walls to help player visibility
-                 * 
-                 * 
-                 */
-            }
-
-            // FIRST PERSON VIEW
-            else
-            {
-                bool currentAmmoChanged = false;
-
-                viewUI.setSprite(viewUIFirstPersonTexture);
-
-                //set up first person camera
-                firstPersonCamPosition = new Vector3(player.position.X, player.collisionHitbox.Max.Y, player.position.Z);
-                firstPersonCamTarget = firstPersonCamPosition + Vector3.Transform(new Vector3(0f, 0f, 1f), player.rotation);
-
-                // set up first person matrices
-                firstPersonProjectionMatrix = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(135), graphics.PreferredBackBufferWidth / graphics.PreferredBackBufferHeight, playerModel.boxExtents.X, 3000f);
-                firstPersonViewMatrix = Matrix.CreateLookAt(firstPersonCamPosition, firstPersonCamTarget, new Vector3(0f, 1f, 0f));
-                worldMatrix = Matrix.CreateWorld(firstPersonCamTarget, Vector3.Forward, Vector3.Up);
-
-                projectionMatrix = firstPersonProjectionMatrix;
-                viewMatrix = firstPersonViewMatrix;
-
-                // MOUSE INPUT
-                if (mouse.X != screenCentreX)
-                { 
-                    player.changeYaw(MathHelper.ToRadians(screenCentreX - mouse.X) / 3);
+                    projectileTypes[i].uiText.draw(spriteBatch);
                 }
 
-                Mouse.SetPosition((int)screenCentreX, (int)screenCentreY); // set mouse to centre
+                viewUI.draw(spriteBatch);
+                gameOverUI.draw(spriteBatch);
+                goalFoundUI.draw(spriteBatch);
 
+                spriteBatch.End();
+                break;
 
-                // fire gun
-                if (mouse.LeftButton == ButtonState.Pressed && gunLoaded && !projectileTypes[loadedProjectileIndex].Equals(none))
-                {
-                    if (projectileTypes[loadedProjectileIndex].hasSecondaryFire && projectileTypes[loadedProjectileIndex].secondaryFireAvailable)
-                    {
-                        // only one pull projectile allowed to be active at any one time
-                    }
-                    else
-                    {
-                        for (int i = 1; i < numberOfProjectileTypes; i++)
-                        {
-                            if (projectileTypes[i].uiMouseButtons.currentlyUsesSprite(primaryFireAvailableUITexture))
-                            {
-                                projectileTypes[i].uiMouseButtons.setSprite(null);
-                            }
-                        }
-                        projectileTypes[loadedProjectileIndex].uiMouseButtons.setSprite(primaryFireUsedUITexture);
-                        gunLoaded = false;
-                        allProjectiles.Add(createNewProjectile(projectileTypes[loadedProjectileIndex].classification));
-                        if (projectileTypes[loadedProjectileIndex].hasSecondaryFire)
-                        {
-                            projectileTypes[loadedProjectileIndex].secondaryFireAvailable = true;
-                        }
-                    }
-                }
-                // mouse button must be released in between each shot
-                if (mouse.LeftButton == ButtonState.Released && !gunLoaded && !projectileTypes[loadedProjectileIndex].Equals(none))
-                {
-                    gunLoaded = true;
-                    for (int i = 1; i < numberOfProjectileTypes; i++)
-                    {
-                        if (projectileTypes[i].secondaryFireAvailable)
-                        {
-                            projectileTypes[i].uiMouseButtons.setSprite(secondaryFireAvailableUITexture);
-                        }
-                        else
-                        {
-                            if (loadedProjectileIndex == i)
-                            {
-                                projectileTypes[loadedProjectileIndex].uiMouseButtons.setSprite(primaryFireAvailableUITexture);
-                            }
-                            else
-                            {
-                                projectileTypes[i].uiMouseButtons.setSprite(null);
-                            }
-                        }
-                    }
-                }
+            case GameState.mainMenu:
+                spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend);
+                mainMenu.drawMainMenu(gameTime, spriteBatch);
+                spriteBatch.End();
+                break;
 
-                // KEYBOARD INPUT
-                // player move
-                if ((keyboard.IsKeyDown(Keys.Left) || keyboard.IsKeyDown(Keys.A)) && (keyboard.IsKeyUp(Keys.Right) && keyboard.IsKeyUp(Keys.D)))
-                {
-                    playerDisplacement += -(new Vector3(2f, 2f, 2f) * new Vector3((float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg - 180)), 0f, (float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg))));
-                }
-                if ((keyboard.IsKeyDown(Keys.Right) || keyboard.IsKeyDown(Keys.D)) && (keyboard.IsKeyUp(Keys.Left) && keyboard.IsKeyUp(Keys.A)))
-                {
-                    playerDisplacement += new Vector3(2f, 2f, 2f) * new Vector3((float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg - 180)), 0f, (float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)));
-                }
+            case GameState.helpScreen:
+                spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend);
+                helpScreen.drawHelpScreen(gameTime, spriteBatch);
+                spriteBatch.End();
+                break;
 
-                if ((keyboard.IsKeyDown(Keys.Up) || keyboard.IsKeyDown(Keys.W)) && (keyboard.IsKeyUp(Keys.Down) && keyboard.IsKeyUp(Keys.S))) 
-                {
-                    playerDisplacement += new Vector3((float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg)));
-                }
+            case GameState.levelSelectScreen:
+                spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend);
+                levelSelectScreen.drawLevelSelect(gameTime, spriteBatch);
+                spriteBatch.End();
+                break;
 
-                if ((keyboard.IsKeyDown(Keys.Down) || keyboard.IsKeyDown(Keys.S)) && (keyboard.IsKeyUp(Keys.Up) && keyboard.IsKeyUp(Keys.W)))
-                {
-                    playerDisplacement += -(new Vector3((float)Math.Sin(MathHelper.ToRadians(player.currentYawAngleDeg)), 0f, (float)Math.Cos(MathHelper.ToRadians(player.currentYawAngleDeg))));
-                }
+            case GameState.levelPackScreen:
+                spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend);
+                levelPackSelectScreen.drawLevelPackScreen(gameTime, spriteBatch);
+                spriteBatch.End();
+                break;
 
-                player.move(playerDisplacement);
-
-                // choose ammo
-
-                if ((keyboard.IsKeyDown(Keys.D1) || keyboard.IsKeyDown(Keys.NumPad1)) && shock.allowedThisLevel)
-                {
-                    currentAmmoChanged = true;
-                    loadedProjectileIndex = shock.index;
-                }
-                if ((keyboard.IsKeyDown(Keys.D2) || keyboard.IsKeyDown(Keys.NumPad2)) && pull.allowedThisLevel)
-                {
-                    currentAmmoChanged = true;
-                    loadedProjectileIndex = pull.index;
-                }
-
-                if((keyboard.IsKeyDown(Keys.D3) || keyboard.IsKeyDown(Keys.NumPad3)) && teleport.allowedThisLevel)
-                {
-                    currentAmmoChanged = true;
-                    loadedProjectileIndex = teleport.index;
-                }
-
-                if (currentAmmoChanged)
-                {
-                    projectileTypes[loadedProjectileIndex].uiBackground.setSprite(selectedProjectileUITexture);
-                    if (!projectileTypes[loadedProjectileIndex].secondaryFireAvailable)
-                    {
-                        projectileTypes[loadedProjectileIndex].uiMouseButtons.setSprite(primaryFireAvailableUITexture);
-                    }
-                    for (int i = 1; i < numberOfProjectileTypes; i++)
-                    {
-                        if (!projectileTypes[i].Equals(projectileTypes[loadedProjectileIndex]))
-                        {
-                            if (projectileTypes[i].uiBackground.currentlyUsesSprite(selectedProjectileUITexture))
-                            {
-                                projectileTypes[i].uiBackground.setSprite(unselectedProjectileUITexture);
-                            }
-                            if (!projectileTypes[i].secondaryFireAvailable)
-                            {
-                                projectileTypes[i].uiMouseButtons.setSprite(null);
-                            }
-                        }
-                    }
-                }
+            default:
+                GraphicsDevice.Clear(Color.SandyBrown);
+                break;
             }
-            
-            base.Update(gameTime);
-        }
-
-        protected override void Draw(GameTime gameTime)
-        {
-            GraphicsDevice.Clear(Color.CornflowerBlue);
-
-            GraphicsDevice.DepthStencilState = new DepthStencilState() { DepthBufferEnable = true }; // allows drawing in 3D
-
-            // DRAW 3D OBJECTS
-            foreach (Actor t in terrain)
-            {
-                t.draw(viewMatrix, projectionMatrix);
-            }
-
-            foreach(Actor f in floor)
-            {
-                f.draw(viewMatrix, projectionMatrix);
-            }
-
-            foreach(Actor h in hazards)
-            {
-                h.draw(viewMatrix, projectionMatrix);
-            }
-
-            foreach(DartSpawner ds in dartSpawners)
-            {
-                List<Hazard> darts = ds.getDartList();
-
-                foreach(Hazard dart in darts)
-                {
-                    dart.draw(viewMatrix, projectionMatrix);
-                }
-            }
-
-            foreach(Projectile p in allProjectiles)
-            {
-                p.draw(viewMatrix, projectionMatrix);
-            }
-
-            foreach(NPC g in guards)
-            {
-                g.draw(viewMatrix, projectionMatrix);
-            }
-
-            foreach(ProjectileActivatedTrigger pat in projectileActivatedTriggers)
-            {
-                pat.draw(viewMatrix, projectionMatrix);
-            }
-
-            foreach(TimeActivatedTrigger tat in timeActivatedTriggers)
-            {
-                tat.draw(viewMatrix, projectionMatrix);
-            }
-
-            foreach(MovementActivatedTrigger mat in movementActivatedTriggers)
-            {
-                mat.draw(viewMatrix, projectionMatrix);
-            }
-
-            if (Keyboard.GetState().IsKeyDown(Keys.Tab))
-            {
-                player.draw(viewMatrix, projectionMatrix);
-            }
-
-            goal.draw(viewMatrix, projectionMatrix);
-
-
-            // DRAW UI
-            spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend);
-
-            for (int i = 1; i < numberOfProjectileTypes; i++)
-            {
-                projectileTypes[i].uiBackground.draw(spriteBatch);
-                projectileTypes[i].uiText.draw(spriteBatch);
-                if (!projectileTypes[i].uiMouseButtons.currentlyUsesSprite(null))
-                {
-                    projectileTypes[i].uiMouseButtons.draw(spriteBatch);
-                }
-            }
-
-            viewUI.draw(spriteBatch);
-            gameOverUI.draw(spriteBatch);
-            goalFoundUI.draw(spriteBatch);
-
-            spriteBatch.End();
 
             base.Draw(gameTime);
         }
@@ -1110,6 +1132,8 @@ namespace Game1
             List<Tile> npcPatrolPath = new List<Tile>();
             Vector2 lastTileCoordinates = npc.currentTile.coordinates;
 
+            // if the last char of instructions isn't a comma then add one
+            // needs to be this way for parsing reasons
             if (instructionList[instructionList.Length - 1] != ',')
             {
                 instructionList += ",";
@@ -1151,39 +1175,6 @@ namespace Game1
             npc.createInstructionList(npcInstructionList);
             npc.createPatrolPath(npcPatrolPath);
         }
-
-        //public Tile getTileData(Vector2 tileCoordinates)
-        //{
-        //    foreach(Tile t in levelTiles)
-        //    {
-        //        if (t.coordinates.X == tileCoordinates.X && t.coordinates.Y == tileCoordinates.Y)
-        //        {
-        //            return t;
-        //        }
-        //    }
-
-        //    /*
-        //     * 
-        //     * 
-        //     * 
-        //     * change this to return tile that the relevant character is standing on
-        //     * 
-        //     * 
-        //     * 
-        //     */
-        //    return levelTiles[0];
-        //}
-
-        // walls have square bases so don't need rotation 
-
-        //public void createWall(Vector3 position, float rotation = 0)
-        //{
-        //    Actor newWall = new Actor(wall, position);
-
-        //    newWall.changeYaw(MathHelper.ToRadians(rotation));
-
-        //    terrain.Add(newWall);
-        //}
 
         public void createDartSpawner(Vector3 position, bool initiallyActive, double? intervalTimer = null, float rotation = 0)
         {
@@ -1229,58 +1220,182 @@ namespace Game1
             return newProjectile;
         }
 
-        public void createLevel(List<string> levelTextRepresentation, List<string> levelActorsTextRepresentation)
+        public static List<Level> loadLevelPack(string levelPackName)
+        {
+            List<Level> levelPack = new List<Level>();
+            Level level = new Level();
+            bool isFirstLevelOfPack = true;
+
+            try
+            {
+                using (var stream = new FileStream(levelPacksFileLocation + "\\" + levelPackName, FileMode.Open))
+                {
+                    using (var reader = new StreamReader(stream))
+                    {
+                        while (!reader.EndOfStream)
+                        {
+                            string line = reader.ReadLine();
+
+                            // start of a new level
+                            if (line[0] == '/')
+                            {
+                                string levelName = line.Remove(0, 1);
+                                level.name = levelName;
+
+                                if (isFirstLevelOfPack)
+                                {
+                                    level.unlocked = true;
+                                    isFirstLevelOfPack = false;
+                                }
+
+                                levelPack.Add(level);
+                                level = new Level();
+                            }
+
+                            // line is part of same level
+                            else
+                            {
+                                if (line[0] == '#')
+                                {
+                                    // # adds an actor to the level
+                                    string levelActor = line.Remove(0, 1);
+                                    level.actors.Add(levelActor);
+                                }
+                                else if (line[0] == '~')
+                                {
+                                    // ~ sets allowed projectiles
+                                    string[] individualInstructions;
+                                    string instructionLine = line.Remove(0, 1);
+
+                                    for (int i = 0; i < instructionLine.Length; i++)
+                                    {
+                                        char c = instructionLine[i];
+                                        if (c == ';')
+                                        {
+                                            level.numberOfProjectilesAllowed++;
+                                        }
+                                    }
+
+                                    individualInstructions = instructionLine.Split(';');
+
+                                    for (int i = 0; i < level.numberOfProjectilesAllowed; i++)
+                                    {
+                                        int projectileID = Convert.ToInt32(individualInstructions[i]);
+                                        level.projectilesAllowed.Add(projectileID);
+                                    }
+                                }
+                                else
+                                {
+                                    level.layout.Add(line);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                currentLevelNumber = 0;
+                LevelSelect.changeLevelPack(levelPack);
+                
+            }
+            catch(FileNotFoundException)
+            {
+                levelPack = loadLevelPack("Default.txt");
+            }
+            return levelPack;
+        }
+
+        public void resetLevel(int levelNumber)
+        {
+            Mouse.SetPosition((int)screenCentreX, (int)screenCentreY);
+            Level thisLevel = currentLevelPack[levelNumber];
+
+            // reset projectiles allowed on level
+            for (int i = 1; i < numberOfProjectileTypes; i++)
+            {
+                projectileTypes[i].allowedThisLevel = false;
+            }
+            foreach (int pa in thisLevel.projectilesAllowed)
+            {
+                projectileTypes[pa].allowedThisLevel = true;
+            }
+
+            terrain = new List<Actor>();
+            floor = new List<Actor>();
+            roof = new List<Actor>();
+            guards = new List<NPC>();
+            hazards = new List<Hazard>();
+            dartSpawners = new List<DartSpawner>();
+            levelTiles = new List<Tile>();
+            projectileActivatedTriggers = new List<ProjectileActivatedTrigger>();
+            timeActivatedTriggers = new List<TimeActivatedTrigger>();
+            movementActivatedTriggers = new List<MovementActivatedTrigger>();
+
+            allProjectiles = new List<Projectile>();
+
+            isLevelOver = false;
+            gameOverUI.setActive(false);
+            goalFoundUI.setActive(false);
+
+            createLevel(thisLevel);
+
+            for (int i = 1; i < numberOfProjectileTypes; i++)
+            {
+                Vector2 position = new Vector2(GraphicsDevice.Viewport.Width * ((float)(i) / (float)(numberOfProjectileTypes)), GraphicsDevice.Viewport.Height - 100f);
+
+                projectileTypes[i].uiBackground = new UI(unselectedProjectileUITexture, position, new Vector2(3f, 3f), true);
+                projectileTypes[i].uiMouseButtons = new UI(null, position, new Vector2(3f, 3f), true);
+                if (projectileTypes[i].allowedThisLevel)
+                {
+                    projectileTypes[i].uiText = new UI(projectileTypes[i].uiTextTexture, position, new Vector2(3f, 3f), true);
+                }
+                else
+                {
+                    projectileTypes[i].uiText = new UI(unavailableProjectileUITexture, position, new Vector2(3f, 3f), true);
+                }
+            }
+
+            gunLoaded = true;
+            loadedProjectileIndex = 0;
+            rightMouseButtonDown = false;
+
+            player.setYawAngle(MathHelper.ToRadians(thisLevel.playerStartingAngle));
+
+            Character.setMovementBlockers(terrain);
+        }
+
+        public void createLevel(Level level)
         {
             Tile newTile;
             float zPosition = 0f;
 
+            List<string> levelTextRepresentation = level.layout;
+            List<string> levelActorsTextRepresentation = level.actors;
+
+            // check each row of level
             for (int i = 0; i < levelTextRepresentation.Count; i++)
             {
-                //if (levelTextRepresentation[i].Length % 2 != 0)
-                //{
-                //    levelTextRepresentation[i] += " ";
-                //}
-
+                // check each tile in the row
                 for (int j = 0; j < levelTextRepresentation[i].Length; j++)
                 {
                     float xPosition = (float)(tileSize * j);
                     Vector3 tilePosition = new Vector3(xPosition, 0f, zPosition);
                     char tileContents = levelTextRepresentation[i][j];
-                    //char initialDirection = levelTextRepresentation[i][j + 1];
-                    //float initialAngle;
 
                     newTile.coordinates.X = j;
                     newTile.coordinates.Y = zPosition / tileSize;
                     newTile.centre = new Vector3(xPosition, 0f, zPosition);
 
-                    
+                    roof.Add(new Actor(floorSegmentModel, new Vector3(tilePosition.X, tilePosition.Y + 300f, tilePosition.Z)));
 
                     if (tileContents != 'x') // x = hole in floor
                     {
                         floor.Add(new Actor(floorSegmentModel, tilePosition));
-
+                        
                         switch (tileContents)
                         {
                             case 'O':
                                 terrain.Add(new Actor(wall, tilePosition));
                                 break;
-
-                            //case 'H':
-                            //    createShockGate(tilePosition, true, initialAngle);
-                            //    break;
-
-                            //case 'h':
-                            //    createShockGate(tilePosition, false, initialAngle);
-                            //    break;
-
-                            //case 'P':
-                            //    player.setPosition(tilePosition);
-                            //    player.changeYaw(MathHelper.ToRadians(initialAngle));
-                            //    break;
-
-                            //case 'G':
-                            //    guards.Add(new NPC(pawn, newTile, pawn.moveSpeed, initialAngle));
-                            //    break;
 
                             case 'E':
                                 goal.setPosition(tilePosition);
@@ -1297,6 +1412,7 @@ namespace Game1
                 zPosition += tileSize;
             }
 
+            // check each actor
             for (int i = 0; i < levelActorsTextRepresentation.Count; i++)
             {
                 string[] splitLine;
@@ -1322,6 +1438,7 @@ namespace Game1
 
                 initialDirection = splitLine[2].ToCharArray()[0];
 
+                // convert initial facing direction to an angle
                 switch (initialDirection)
                 {
                     case 'u':
@@ -1343,11 +1460,12 @@ namespace Game1
                 {
                     case 'P':
                         player.setPosition(actorStartingTile.centre);
-                        player.changeYaw(MathHelper.ToRadians(initialAngle));
+                        level.playerStartingAngle = initialAngle;
+                        //player.changeYaw(MathHelper.ToRadians(initialAngle));
                         break;
 
                     case 'H':
-                        // Line: (Type, Tile, Direction, Trigger Type, Trigger Tile, InitiallyActive, CanBeReactivated, ResetTimer, IntervalTimer)
+                        // Line Contents: (Type, Tile, Direction, Trigger Type, Trigger Tile, InitiallyActive, CanBeReactivated, ResetTimer, IntervalTimer)
                         bool initiallyActive;
                         bool canBeReactivated;
                         double? resetTimer, intervalTimer;
@@ -1373,13 +1491,6 @@ namespace Game1
                             intervalTimer = Double.Parse(splitLine[8]);
                         }
 
-                        /*
-                         * 
-                         * 
-                         * change this to dart gate
-                         * 
-                         * 
-                         */
                         createDartSpawner(actorStartingTile.centre, initiallyActive, intervalTimer, initialAngle);
 
                         if (splitLine[3] != "N")
@@ -1453,50 +1564,198 @@ namespace Game1
 
         }
 
-        //public void buildTestLevel()
+        private void endLevel(Actor triggeringActor)
+        {
+            if (!isLevelOver)
+            {
+                isLevelOver = true;
+                levelEndTime = DateTime.Now.TimeOfDay.TotalSeconds;
+
+                if (triggeringActor != null)
+                {
+                    float targetAngleFromZero;
+                    float newLookAtAngle;
+
+                    Vector2 playerToActorVector = new Vector2(triggeringActor.position.X - player.position.X, triggeringActor.position.Z - player.position.Z);
+
+                    targetAngleFromZero = MathHelper.ToDegrees((float)Math.Atan((double)Math.Abs(playerToActorVector.X) / (double)Math.Abs(playerToActorVector.Y)));
+
+                    if (playerToActorVector.Y > 0)
+                    {
+                        if (playerToActorVector.X > 0)
+                        {
+                            newLookAtAngle = targetAngleFromZero;
+                        }
+                        else
+                        {
+                            newLookAtAngle = -targetAngleFromZero;
+                        }
+                    }
+                    else
+                    {
+                        if (playerToActorVector.X > 0)
+                        {
+                            newLookAtAngle = 180 - targetAngleFromZero;
+                        }
+                        else
+                        {
+                            newLookAtAngle = -180 + targetAngleFromZero;
+                        }
+                    }
+
+
+                    //newLookAtAngle = (targetAngleFromZero + targetAngleAddition) * multiplier;
+                    
+                    player.normaliseAngle(ref newLookAtAngle);
+                    player.AutoRotationTargetAngle = newLookAtAngle;
+                }
+            }
+        }
+
+        private void updateLevelOverState(bool goToNextLevel = false)
+        {
+            if (isLevelOver)
+            {
+                if (DateTime.Now.TimeOfDay.TotalSeconds > levelEndTime + levelResetTimer)
+                {
+                    if (goToNextLevel)
+                    {
+                        currentLevelNumber++;
+                        if (currentLevelNumber >= currentLevelPack.Count)
+                        {
+                            currentGameState = GameState.mainMenu;
+                            currentLevelNumber = 0;
+                            return;
+                        }
+
+                        currentLevelPack[currentLevelNumber].unlocked = true;
+                        LevelSelect.changeLevelPack(currentLevelPack);
+                        resetLevel(currentLevelNumber);
+                    }
+                    else
+                    {
+                        resetLevel(currentLevelNumber);
+                    }
+                }
+                else
+                {
+                    if (player.currentYawAngleDeg - player.AutoRotationTargetAngle <= -Actor.rotationSpeed || player.currentYawAngleDeg - player.AutoRotationTargetAngle >= Actor.rotationSpeed)
+                    {
+                        // new and current angle both on right of screen, or both on left of screen
+                        if ((player.AutoRotationTargetAngle > 0 && player.currentYawAngleDeg > 0) || (player.AutoRotationTargetAngle <= 0 && player.currentYawAngleDeg <= 0))
+                        {
+                            // counter clockwise rotation
+                            if (player.AutoRotationTargetAngle > player.currentYawAngleDeg)
+                            {
+                                player.changeYaw(MathHelper.ToRadians(Actor.rotationSpeed));
+                            }
+                            // clockwise rotation
+                            else
+                            {
+                                player.changeYaw(MathHelper.ToRadians(-Actor.rotationSpeed));
+                            }
+                        }
+
+                        // new angle on left, current on right
+                        else if (player.AutoRotationTargetAngle <= 0 && player.currentYawAngleDeg > 0)
+                        {
+                            // clockwise if angle difference > 180, else counterclockwise
+                            if (Math.Abs(player.AutoRotationTargetAngle) + player.currentYawAngleDeg >= 180)
+                            {
+                                player.changeYaw(MathHelper.ToRadians(Actor.rotationSpeed));
+                            }
+                            else
+                            {
+                                player.changeYaw(MathHelper.ToRadians(-Actor.rotationSpeed));
+                            }
+                        }
+                        // new angle on right, current on left
+                        else if (player.AutoRotationTargetAngle > 0 && player.currentYawAngleDeg <= 0)
+                        {
+                            // counter if angle difference > 180, else clockwise
+                            if (Math.Abs(player.currentYawAngleDeg) + player.AutoRotationTargetAngle >= 180)
+                            {
+                                player.changeYaw(MathHelper.ToRadians(-Actor.rotationSpeed));
+                            }
+                            else
+                            {
+                                player.changeYaw(MathHelper.ToRadians(Actor.rotationSpeed));
+                            }
+                        }
+                        player.normaliseAngle(ref player.currentYawAngleDeg);
+
+                    }
+                    else
+                    {
+                        //adawda 
+                    }
+                }
+            }
+        }
+
+        public static void setCurrentLevel(int levelNum, int numberOfLevels)
+        {
+            if (levelNum < numberOfLevels)
+            {
+                currentLevelNumber = levelNum;
+            }
+            else
+            {
+                currentLevelNumber = 0;
+            }
+
+            return;
+        }
+
+        public static string calculateLineBreaks(string initialString, float textAreaWidth, SpriteFont font)
+        {
+            string newString = "";
+            List<string> allLines = new List<string>();
+            string thisLine = "";
+            string nextLineReversed = "";
+            int numberOfLines = 0;
+
+
+            foreach (char c in initialString.ToCharArray())
+            {
+                if (font.MeasureString(thisLine).X >= textAreaWidth)
+                {
+                    while (thisLine.ToCharArray()[thisLine.Length - 1] != ' ')
+                    {
+                        nextLineReversed += thisLine.ToCharArray()[thisLine.Length - 1];
+                        thisLine = thisLine.Remove(thisLine.Length - 1, 1);
+                    }
+                    thisLine += "\n";
+                    numberOfLines++;
+                    allLines.Add(thisLine);
+                    thisLine = "";
+
+                    for (int i = nextLineReversed.Length - 1; i >= 0; i--)
+                    {
+                        thisLine += nextLineReversed.ToCharArray()[i];
+                    }
+                    nextLineReversed = "";
+                }
+
+                thisLine += c.ToString();
+            }
+
+            if (thisLine != "")
+            {
+                allLines.Add(thisLine);
+            }
+
+            foreach (string line in allLines)
+            {
+                newString += line;
+            }
+
+            return newString;
+        }
+
+        //public static string typeKeysToString(Keys key, string typingString)
         //{
-        //    createShockGate(new Vector3(500f, 0f, -300f));
-        //    //createWall(new Vector3(500f, 0f, -125f));
-
-        //    guards.Add(new NPC(pawn, new Vector3(-500f, 0f, -500f), pawn.moveSpeed));
-        //    guards.Add(new NPC(armoured, new Vector3(500f, 0f, -500f), armoured.moveSpeed));
-        //    guards.Add(new NPC(pawn, new Vector3(-800f, 0f, -500f), pawn.moveSpeed));
-        //}
-
-        //public void buildStandardLevel()
-        //{
-        //    /// Create a blank level with boundary walls and a floor
-        //    // horizontal terrain creation
-        //    for (int i = 0; i < graphics.PreferredBackBufferWidth + wall.boxSize.X; i += (int)wall.boxSize.X)
-        //    {
-        //        createWall(new Vector3((float)i, 0f, GraphicsDevice.Viewport.Height + wall.boxExtents.Y));
-        //        createWall(new Vector3((float)i, 0f, -GraphicsDevice.Viewport.Height));
-
-        //        // create terrain in negative direction
-        //        // ignore if i==0, otherwise 2 objects created in same place
-        //        if (i != 0)
-        //        {
-        //            createWall(new Vector3((float)-i, 0f, GraphicsDevice.Viewport.Height + wall.boxExtents.Y));
-        //            createWall(new Vector3((float)-i, 0f, -GraphicsDevice.Viewport.Height));
-        //        }
-        //    }
-
-        //    // vertical terrain creation
-        //    for (int i = 0; i < graphics.PreferredBackBufferHeight + wall.boxSize.X; i += (int)wall.boxSize.X)
-        //    {
-        //        createWall(new Vector3(-GraphicsDevice.Viewport.Width, 0f, (float)i), 90);
-        //        createWall(new Vector3(GraphicsDevice.Viewport.Width, 0f, (float)i), 90);
-
-        //        // create terrain in negative direction
-        //        // ignore if i==0, otherwise 2 objects created in same place
-        //        if (i != 0)
-        //        {
-        //            createWall(new Vector3(-GraphicsDevice.Viewport.Width, 0f, (float)-i), 90);
-        //            createWall(new Vector3(GraphicsDevice.Viewport.Width, 0f, (float)-i), 90);
-        //        }
-        //    }
-
-        //    floor = new Actor(floorModel, new Vector3(0f, 0f, 0f));
+        //    switch (key.)
         //}
     }
 }

@@ -26,9 +26,9 @@ namespace Game1
 
     public class NPC : Character
     { 
-        Direction currentDirection;
         public List<BoundingSphere> detectionArea; // vision area
-        const int visionRange = 12;
+        const int visionRange = 8;
+        const float visionSphereRadius = 50f;
 
         public List<Instruction> instructionList;
         List<Instruction> originalInstructionList;
@@ -79,49 +79,6 @@ namespace Game1
             resettingAngle = false;
         }
 
-
-        //public void patrol(List<Actor> movementBlockers = null)
-        //{
-        //    if (!chasingPlayer && patrolPath.Count > 1)
-        //    {
-        //        if (patrolPath[currentTileIndex].coordinates.X == patrolPath[nextTileIndex].coordinates.X)
-        //        {
-        //            if (patrolPath[currentTileIndex].coordinates.Y > patrolPath[nextTileIndex].coordinates.Y)
-        //            {
-        //                // move up
-        //                move(new Vector3(0f, 0f, -speed.Z), movementBlockers);
-        //            }
-        //            else if (patrolPath[currentTileIndex].coordinates.Y < patrolPath[nextTileIndex].coordinates.Y)
-        //            {
-        //                // move down
-        //                move(new Vector3(0f, 0f, speed.Z), movementBlockers);
-        //            }
-        //        }
-
-        //        else if (patrolPath[currentTileIndex].coordinates.Y == patrolPath[nextTileIndex].coordinates.Y)
-        //        {
-        //            {
-        //                if (patrolPath[currentTileIndex].coordinates.X > patrolPath[nextTileIndex].coordinates.X)
-        //                {
-        //                    // move left
-        //                    move(new Vector3(-speed.X, 0f, 0f), movementBlockers);
-        //                }
-        //                else if (patrolPath[currentTileIndex].coordinates.X < patrolPath[nextTileIndex].coordinates.X)
-        //                {
-        //                    // move right
-        //                    move(new Vector3(speed.X, 0f, 0f), movementBlockers);
-        //                }
-        //            }
-
-        //            // check if next tile reached
-        //            // if pos -> pos - speed, == nextTile.pos
-        //            // currentTile = nextTile
-        //            // set NextTile to nextTile++
-        //            // set pos to currentTileCentre
-        //        }
-        //    }
-        //}
-
         public void update(List<Actor> visionBlockers)
         {
             updateHitboxes();
@@ -165,14 +122,6 @@ namespace Game1
             base.move();
         }
 
-        public void changeDirection(bool clockwise)
-        {
-            if (clockwise)
-                currentDirection = currentDirection.nextRightAngleDirectionClockwise;
-            else
-                currentDirection = currentDirection.nextRightAngleDirectionCounterClockwise;
-        }
-
         public override void updateHitboxes()
         {
 
@@ -190,14 +139,15 @@ namespace Game1
                 BoundingSphere nextVisionSphere;
 
                 nextVisionSphere = new BoundingSphere(new Vector3(
-                    position.X + (float)Math.Sin(MathHelper.ToRadians(currentYawAngleDeg)) * modelData.boxExtents.Z * (i + 1),
+                    position.X + (float)Math.Sin(MathHelper.ToRadians(currentYawAngleDeg)) * visionSphereRadius * (i + 1),
                     position.Y + modelData.boxExtents.Y,
-                    position.Z + (float)Math.Cos(MathHelper.ToRadians(currentYawAngleDeg)) * modelData.boxExtents.Z * (i + 1)), modelData.boxSize.Z);
+                    position.Z + (float)Math.Cos(MathHelper.ToRadians(currentYawAngleDeg)) * visionSphereRadius * (i + 1)),
+                    visionSphereRadius);
 
                 // stop detection area short if it collides with a wall
                 foreach (Actor v in visionBlockers)
                 {
-                    if (nextVisionSphere.Intersects(v.collisionHitbox) && v.getModelData().blocksVision)
+                    if (nextVisionSphere.Intersects(v.collisionHitbox) && v.getModelData().blocksVision && !v.Equals(this))
                     {
                         return;
                     }

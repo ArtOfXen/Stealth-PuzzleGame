@@ -39,7 +39,6 @@ namespace Game1
         public override void update()
         {
             List<Hazard> dartsToNotDestroy = new List<Hazard>();
-
             if (isActive() && (DateTime.Now.TimeOfDay.TotalSeconds > lastDartTime + dartSpawnInterval))
             {
                 addNewDart();
@@ -61,6 +60,10 @@ namespace Game1
                 if (!(dart.collidesWith(despawnWall)))
                 {
                     dartsToNotDestroy.Add(dart);
+                }
+                else
+                {
+                    dart.detachFromParentActor();
                 }
             }
 
@@ -89,6 +92,7 @@ namespace Game1
 
             newDart = new Hazard(dartModelData, new Vector3(dartPosX, dartPosY, dartPosZ), 10);
             newDart.changeYaw(MathHelper.ToRadians(currentYawAngleDeg - 90));
+            spawnWall.attachNewActor(newDart);
 
             activeDarts.Add(newDart);
         }

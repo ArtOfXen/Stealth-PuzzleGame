@@ -19,16 +19,17 @@ namespace Game1
         public float currentYawAngleDeg; // in degrees
         public float currentPitchAngleDeg;
 
+        public const float rotationSpeed = 3f;
+
         protected ActorModel modelData;
-        protected float rotationSpeed;
 
         protected List<Actor> attachedActors; // child actors
         protected Actor parentActor;
+
         public Actor(ActorModel actorModel, Vector3 startPosition)
         {
             modelData = actorModel;
             position = startPosition;
-            rotationSpeed = 3f;
 
             currentYawAngleDeg = Game1.south.getAngleDegrees();
             currentPitchAngleDeg = 0f;
@@ -130,6 +131,7 @@ namespace Game1
 
         public void changeYaw(float angleInRadians)
         {
+            /// rotate by specified amount
             rotation *= Matrix.CreateFromAxisAngle(Matrix.CreateTranslation(parentActor.position).Up, angleInRadians);
             //a.rotation *= Matrix.CreateRotationY(angleInRadians);
             currentYawAngleDeg += MathHelper.ToDegrees(angleInRadians);
@@ -155,6 +157,14 @@ namespace Game1
                 //}
             }
             updateHitboxes();
+        }
+
+        public void setYawAngle(float angleInRadians)
+        {
+            /// rotate to specified angle
+            rotation = Matrix.Identity;
+            currentYawAngleDeg = 0f;
+            changeYaw(angleInRadians);
         }
 
         public void changePitch(float angleInRadians)
