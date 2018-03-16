@@ -72,7 +72,7 @@ namespace Game1
                     {
                         if (b.buttonText == hse.name)
                         {
-                            helpBoxText = calculateLineBreaks(hse.description, helpBox.Width, Game1.buttonText);
+                            helpBoxText = Game1.calculateLineBreaks(hse.description, helpBox.Width, Game1.buttonText);
                             break;
                         }
                     }
@@ -125,52 +125,6 @@ namespace Game1
         public void setReturnState(GameState returnState)
         {
             lastGameState = returnState;
-        }
-
-        private string calculateLineBreaks(string initialString, float textAreaWidth, SpriteFont font)
-        {
-            string newString = "";
-            List<string> allLines = new List<string>();
-            string thisLine = "";
-            string nextLineReversed = "";
-            int numberOfLines = 0;
-            
-
-            foreach(char c in initialString.ToCharArray())
-            {
-                if (font.MeasureString(thisLine).X >= textAreaWidth)
-                {
-                    while (thisLine.ToCharArray()[thisLine.Length - 1] != ' ')
-                    {
-                        nextLineReversed += thisLine.ToCharArray()[thisLine.Length - 1];
-                        thisLine = thisLine.Remove(thisLine.Length - 1, 1);
-                    }
-                    thisLine += "\n";
-                    numberOfLines++;
-                    allLines.Add(thisLine);
-                    thisLine = "";
-
-                    for (int i = nextLineReversed.Length - 1; i >= 0; i--)
-                    {
-                        thisLine += nextLineReversed.ToCharArray()[i];
-                    }
-                    nextLineReversed = "";
-                }
-
-                thisLine += c.ToString();
-            }
-
-            if (thisLine != "")
-            {
-                allLines.Add(thisLine);
-            }
-
-            foreach(string line in allLines)
-            {
-                newString += line;
-            }
-
-            return newString;
         }
     }
 }

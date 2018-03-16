@@ -10,18 +10,19 @@ using System.IO;
 
 // PRIORITY
 
-// current npc instructions on level 1 broken - detection also broken, sees player at long range through walls
-// level select screen
-// load new level packs
+// falling through floor spazes game out
 
 // art and textures
+// something for a hole instead of just empty space
 // lighting - flashlight for first person? Spotlight for birds eye?
+    // last games programming lab was about lighting effects
 
 // Boulder Hazard. Essentially replaces armoured guard. Has a patrol path, kills enemies / players it runs over. Not affected by pull.
 // could just make this an enemy with a very short vision radius
 // A hazard similar to boulder hazard, but doesn't move unless triggered, then moves until it collides with something then stops. Used to block / unblock passages as well as kill
 
 // SECONDARY
+// have to update "last mouse state" stored in each screen class when gameState is changed
 // set pull to pull things to tile it is on, instead of its position
 // pulls things on same row/column as it only
 // change model to demonstrate better
@@ -31,8 +32,8 @@ using System.IO;
 
 // OTHER
 // moving platforms (patrol like enemies)
-    // would have to move things on top of them as well
-    // if character.underfootHitbox collides with moving platform, then move character when platform moves
+// would have to move things on top of them as well
+// if character.underfootHitbox collides with moving platform, then move character when platform moves
 
 
 
@@ -44,6 +45,7 @@ namespace Game1
     public enum GameState
     {
         mainMenu,
+        levelSelectScreen,
         helpScreen,
         levelPackScreen,
         gameInProgress,
@@ -96,6 +98,8 @@ namespace Game1
 
         MainMenu mainMenu;
         HelpScreen helpScreen;
+        LevelSelect levelSelectScreen;
+        LevelPackSelect levelPackSelectScreen;
 
         bool isLevelOver;
         double levelResetTimer;
@@ -166,7 +170,7 @@ namespace Game1
         Player player;
         Actor goal;
 
-        string levelPacksFileLocation;
+        static string levelPacksFileLocation;
 
         List<Tile> levelTiles;
         float tileSize;
@@ -189,7 +193,7 @@ namespace Game1
         UI goalFoundUI;
 
         List<Level> currentLevelPack;
-        int currentLevelNumber;
+        static int currentLevelNumber;
         int numberOfLevelsInLevelPack;
 
         public Game1()
@@ -281,8 +285,12 @@ namespace Game1
             
             base.Initialize();
 
+            currentLevelPack = new List<Level>();
+
             mainMenu = new MainMenu(GraphicsDevice, unselectedProjectileUITexture, selectedProjectileUITexture);
             helpScreen = new HelpScreen(GameState.mainMenu, GraphicsDevice);
+            levelSelectScreen = new LevelSelect(GraphicsDevice, currentLevelPack);
+            levelPackSelectScreen = new LevelPackSelect(GraphicsDevice);
 
             player = new Player(playerModel, new Vector3(0f, 0f, 0f), 6);
             goal = new Actor(goalModel, new Vector3(0f, 0f, 150f));
@@ -305,7 +313,7 @@ namespace Game1
             gameOverUI = new UI(gameOverTexture, new Vector2(screenCentreX, screenCentreY), new Vector2(2f, 2f), false);
             goalFoundUI = new UI(goalFoundTexture, new Vector2(screenCentreX, screenCentreY), new Vector2(2f, 2f), false);
 
-            currentLevelPack = loadLevelPack("LevelFile.txt");
+            currentLevelPack = loadLevelPack("Default.txt");
             numberOfLevelsInLevelPack = currentLevelPack.Count;
         }
 
@@ -470,49 +478,53 @@ namespace Game1
                                 g.Falling = true;
                             }
 
-                            g.update(enemyVisionBlockers);
+                            if (!isLevelOver)
+                            {
 
-                            // detect player if collide with enemy
-                            if (player.collidesWith(g))
-                            {
-                                g.detectPlayer();
-                                endLevel(g);
-                                gameOverUI.setActive(true);
-                            }
-                            // detect player if collides with area in front of enemy
-                            else
-                            {
-                                foreach (BoundingSphere b in g.detectionArea)
+                                g.update(enemyVisionBlockers);
+
+                                // detect player if collide with enemy
+                                if (player.collidesWith(g))
                                 {
-                                    if (player.collisionHitbox.Intersects(b))
+                                    g.detectPlayer();
+                                    endLevel(g);
+                                    gameOverUI.setActive(true);
+                                }
+                                // detect player if collides with area in front of enemy
+                                else
+                                {
+                                    foreach (BoundingSphere b in g.detectionArea)
                                     {
-                                        g.detectPlayer();
-                                        endLevel(g);
-                                        gameOverUI.setActive(true);
+                                        if (player.collisionHitbox.Intersects(b))
+                                        {
+                                            g.detectPlayer();
+                                            endLevel(g);
+                                            gameOverUI.setActive(true);
 
-                                        /*
-                                         * 
-                                         * 
-                                         * 
-                                         * 
-                                         * 
-                                         * npc reaction to seeing player
-                                         * 
-                                         * 
-                                         * 
-                                         * 
-                                         * 
-                                         */
+                                            /*
+                                             * 
+                                             * 
+                                             * 
+                                             * 
+                                             * 
+                                             * npc reaction to seeing player
+                                             * 
+                                             * 
+                                             * 
+                                             * 
+                                             * 
+                                             */
+                                        }
                                     }
                                 }
-                            }
 
-                            // kill guards who collide with hazards
-                            foreach (Hazard h in hazards)
-                            {
-                                if (h.collidesWith(g))
+                                // kill guards who collide with hazards
+                                foreach (Hazard h in hazards)
                                 {
-                                    g.kill();
+                                    if (h.collidesWith(g))
+                                    {
+                                        g.kill();
+                                    }
                                 }
                             }
                         }
@@ -951,15 +963,25 @@ namespace Game1
                 case GameState.mainMenu:
                     this.IsMouseVisible = true;
                     currentGameState = mainMenu.update(mouse);
+                    break;
+
+                case GameState.helpScreen:
+                    this.IsMouseVisible = true;
+                    currentGameState = helpScreen.update(mouse);
+                    break;
+
+                case GameState.levelSelectScreen:
+                    this.IsMouseVisible = true;
+                    currentGameState = levelSelectScreen.update(mouse);
                     if (currentGameState == GameState.gameInProgress)
                     {
                         resetLevel(currentLevelNumber);
                     }
                     break;
 
-                case GameState.helpScreen:
+                case GameState.levelPackScreen:
                     this.IsMouseVisible = true;
-                    currentGameState = helpScreen.update(mouse);
+                    currentGameState = levelPackSelectScreen.update(mouse);
                     break;
 
                 default:
@@ -1082,6 +1104,18 @@ namespace Game1
                 spriteBatch.End();
                 break;
 
+            case GameState.levelSelectScreen:
+                spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend);
+                levelSelectScreen.drawLevelSelect(gameTime, spriteBatch);
+                spriteBatch.End();
+                break;
+
+            case GameState.levelPackScreen:
+                spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend);
+                levelPackSelectScreen.drawLevelPackScreen(gameTime, spriteBatch);
+                spriteBatch.End();
+                break;
+
             default:
                 GraphicsDevice.Clear(Color.SandyBrown);
                 break;
@@ -1098,6 +1132,8 @@ namespace Game1
             List<Tile> npcPatrolPath = new List<Tile>();
             Vector2 lastTileCoordinates = npc.currentTile.coordinates;
 
+            // if the last char of instructions isn't a comma then add one
+            // needs to be this way for parsing reasons
             if (instructionList[instructionList.Length - 1] != ',')
             {
                 instructionList += ",";
@@ -1184,78 +1220,87 @@ namespace Game1
             return newProjectile;
         }
 
-        List<Level> loadLevelPack(string levelPackName)
+        public static List<Level> loadLevelPack(string levelPackName)
         {
             List<Level> levelPack = new List<Level>();
             Level level = new Level();
             bool isFirstLevelOfPack = true;
 
-            using (var stream = new FileStream(levelPacksFileLocation + "\\" + levelPackName, FileMode.Open))
+            try
             {
-                using (var reader = new StreamReader(stream))
+                using (var stream = new FileStream(levelPacksFileLocation + "\\" + levelPackName, FileMode.Open))
                 {
-                    while (!reader.EndOfStream)
+                    using (var reader = new StreamReader(stream))
                     {
-                        string line = reader.ReadLine();
-                        
-                        // start of a new level
-                        if (line[0] == '/')
+                        while (!reader.EndOfStream)
                         {
-                            string levelName = line.Remove(0, 1);
-                            level.name = levelName;
+                            string line = reader.ReadLine();
 
-                            if (isFirstLevelOfPack)
+                            // start of a new level
+                            if (line[0] == '/')
                             {
-                                level.unlocked = true;
-                                isFirstLevelOfPack = false;
-                            }
+                                string levelName = line.Remove(0, 1);
+                                level.name = levelName;
 
-                            levelPack.Add(level);
-                            level = new Level();
-                        }
-
-                        // line is part of same level
-                        else
-                        {
-                            if (line[0] == '#')
-                            {
-                                // # adds an actor to the level
-                                string levelActor = line.Remove(0, 1);
-                                level.actors.Add(levelActor);
-                            }
-                            else if (line[0] == '~')
-                            {
-                                // ~ sets allowed projectiles
-                                string[] individualInstructions;
-                                string instructionLine = line.Remove(0, 1);
-
-                                for (int i = 0; i < instructionLine.Length; i++)
+                                if (isFirstLevelOfPack)
                                 {
-                                    char c = instructionLine[i];
-                                    if (c == ';')
-                                    {
-                                        level.numberOfProjectilesAllowed++;
-                                    }
+                                    level.unlocked = true;
+                                    isFirstLevelOfPack = false;
                                 }
 
-                                individualInstructions = instructionLine.Split(';');
-
-                                for (int i = 0; i < level.numberOfProjectilesAllowed; i++)
-                                {
-                                    int projectileID = Convert.ToInt32(individualInstructions[i]);
-                                    level.projectilesAllowed.Add(projectileID);
-                                }
+                                levelPack.Add(level);
+                                level = new Level();
                             }
+
+                            // line is part of same level
                             else
                             {
-                                level.layout.Add(line);
+                                if (line[0] == '#')
+                                {
+                                    // # adds an actor to the level
+                                    string levelActor = line.Remove(0, 1);
+                                    level.actors.Add(levelActor);
+                                }
+                                else if (line[0] == '~')
+                                {
+                                    // ~ sets allowed projectiles
+                                    string[] individualInstructions;
+                                    string instructionLine = line.Remove(0, 1);
+
+                                    for (int i = 0; i < instructionLine.Length; i++)
+                                    {
+                                        char c = instructionLine[i];
+                                        if (c == ';')
+                                        {
+                                            level.numberOfProjectilesAllowed++;
+                                        }
+                                    }
+
+                                    individualInstructions = instructionLine.Split(';');
+
+                                    for (int i = 0; i < level.numberOfProjectilesAllowed; i++)
+                                    {
+                                        int projectileID = Convert.ToInt32(individualInstructions[i]);
+                                        level.projectilesAllowed.Add(projectileID);
+                                    }
+                                }
+                                else
+                                {
+                                    level.layout.Add(line);
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            currentLevelNumber = 0;
+                currentLevelNumber = 0;
+                LevelSelect.changeLevelPack(levelPack);
+                
+            }
+            catch(FileNotFoundException)
+            {
+                levelPack = loadLevelPack("Default.txt");
+            }
             return levelPack;
         }
 
@@ -1313,7 +1358,7 @@ namespace Game1
             loadedProjectileIndex = 0;
             rightMouseButtonDown = false;
 
-            player.changeYaw(MathHelper.ToRadians(thisLevel.playerStartingAngle));
+            player.setYawAngle(MathHelper.ToRadians(thisLevel.playerStartingAngle));
 
             Character.setMovementBlockers(terrain);
         }
@@ -1584,6 +1629,7 @@ namespace Game1
                         }
 
                         currentLevelPack[currentLevelNumber].unlocked = true;
+                        LevelSelect.changeLevelPack(currentLevelPack);
                         resetLevel(currentLevelNumber);
                     }
                     else
@@ -1646,5 +1692,70 @@ namespace Game1
                 }
             }
         }
+
+        public static void setCurrentLevel(int levelNum, int numberOfLevels)
+        {
+            if (levelNum < numberOfLevels)
+            {
+                currentLevelNumber = levelNum;
+            }
+            else
+            {
+                currentLevelNumber = 0;
+            }
+
+            return;
+        }
+
+        public static string calculateLineBreaks(string initialString, float textAreaWidth, SpriteFont font)
+        {
+            string newString = "";
+            List<string> allLines = new List<string>();
+            string thisLine = "";
+            string nextLineReversed = "";
+            int numberOfLines = 0;
+
+
+            foreach (char c in initialString.ToCharArray())
+            {
+                if (font.MeasureString(thisLine).X >= textAreaWidth)
+                {
+                    while (thisLine.ToCharArray()[thisLine.Length - 1] != ' ')
+                    {
+                        nextLineReversed += thisLine.ToCharArray()[thisLine.Length - 1];
+                        thisLine = thisLine.Remove(thisLine.Length - 1, 1);
+                    }
+                    thisLine += "\n";
+                    numberOfLines++;
+                    allLines.Add(thisLine);
+                    thisLine = "";
+
+                    for (int i = nextLineReversed.Length - 1; i >= 0; i--)
+                    {
+                        thisLine += nextLineReversed.ToCharArray()[i];
+                    }
+                    nextLineReversed = "";
+                }
+
+                thisLine += c.ToString();
+            }
+
+            if (thisLine != "")
+            {
+                allLines.Add(thisLine);
+            }
+
+            foreach (string line in allLines)
+            {
+                newString += line;
+            }
+
+            return newString;
+        }
+
+        //public static string typeKeysToString(Keys key, string typingString)
+        //{
+        //    switch (key.)
+        //}
     }
 }
