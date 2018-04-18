@@ -15,7 +15,7 @@ namespace Game1
         Actor spawnWall;
         Actor despawnWall;
         double lastDartTime;
-        const double dartSpawnInterval = 0.15;
+        const double dartSpawnInterval = 0.07;
         Random rng;
 
         public DartSpawner(ActorModel actorModel, Vector3 startPosition, Actor dartSpawnerWall, Actor otherWall, ActorModel dartModel, bool activeAtLevelStart = true, double? automaticIntervalTimer = null) : base(actorModel, startPosition, activeAtLevelStart, automaticIntervalTimer)
@@ -79,12 +79,12 @@ namespace Game1
 
             if (currentYawAngleDeg == -90 || currentYawAngleDeg == 90)
             {
-                dartPosX = rng.Next((int)spawnWall.collisionHitbox.Min.X, (int)spawnWall.collisionHitbox.Max.X);
+                dartPosX = rng.Next((int)spawnWall.collisionHitbox.Min.X + (int)(spawnWall.getModelData().boxExtents.X * (1f/3)), (int)spawnWall.collisionHitbox.Max.X - (int)(spawnWall.getModelData().boxExtents.X * (1f / 3)));
                 dartPosZ = spawnWall.position.Z;
             }
             else
             {
-                dartPosZ = rng.Next((int)spawnWall.collisionHitbox.Min.Z, (int)spawnWall.collisionHitbox.Max.Z);
+                dartPosZ = rng.Next((int)spawnWall.collisionHitbox.Min.Z + (int)(spawnWall.getModelData().boxExtents.Z * (1f / 3)), (int)spawnWall.collisionHitbox.Max.Z - (int)(spawnWall.getModelData().boxExtents.Z * (1f / 3)));
                 dartPosX = spawnWall.position.X;
             }
             

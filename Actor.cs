@@ -31,7 +31,7 @@ namespace Game1
             modelData = actorModel;
             position = startPosition;
 
-            currentYawAngleDeg = Game1.south.getAngleDegrees();
+            currentYawAngleDeg = 0f;
             currentPitchAngleDeg = 0f;
 
             rotation = Matrix.Identity;
@@ -53,7 +53,6 @@ namespace Game1
                 {
                     foreach (BasicEffect effect in mesh.Effects)
                     {
-                        //effect.AmbientLightColor = new Vector3(1f, 0, 0);
                         effect.EnableDefaultLighting();
                         effect.View = viewMatrix;
                         effect.World = a.rotation * Matrix.CreateTranslation(a.position);
@@ -110,10 +109,6 @@ namespace Game1
                 hitboxX = minimumHitboxSize + (factorOfDifferenceToAddX * differenceBetweenMinMax);
                 hitboxZ = minimumHitboxSize + (factorOfDifferenceToAddZ * differenceBetweenMinMax);
 
-                //float hitboxX = ((float)Math.Abs(Math.Cos(MathHelper.ToRadians(a.currentYawAngleDeg))) * a.modelData.boxSize.X) + ((float)Math.Abs(Math.Sin(MathHelper.ToRadians(a.currentYawAngleDeg))) * a.modelData.boxSize.Z);
-                //float hitboxZ = ((float)Math.Abs(Math.Cos(MathHelper.ToRadians(a.currentYawAngleDeg))) * a.modelData.boxSize.Z) + ((float)Math.Abs(Math.Sin(MathHelper.ToRadians(a.currentYawAngleDeg))) * a.modelData.boxSize.X);
-
-
                 // calculate hitbox positions
                 Vector3 boxMin = new Vector3(
                     a.position.X - hitboxX / 2,
@@ -133,7 +128,6 @@ namespace Game1
         {
             /// rotate by specified amount
             rotation *= Matrix.CreateFromAxisAngle(Matrix.CreateTranslation(parentActor.position).Up, angleInRadians);
-            //a.rotation *= Matrix.CreateRotationY(angleInRadians);
             currentYawAngleDeg += MathHelper.ToDegrees(angleInRadians);
             normaliseAngle(ref currentYawAngleDeg);
 
@@ -149,12 +143,6 @@ namespace Game1
                     a.currentYawAngleDeg += MathHelper.ToDegrees(angleInRadians);
                     normaliseAngle(ref a.currentYawAngleDeg);
                 }
-
-                //if (!a.Equals(this))
-                //{
-                //    Vector3 transform = Vector3.Transform(a.position, a.rotation);
-                //    a.position = (this.position + transform);
-                //}
             }
             updateHitboxes();
         }

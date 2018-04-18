@@ -13,18 +13,18 @@ namespace Game1
 
         public float AutoRotationTargetAngle { get; set; }
 
-        public Player(ActorModel actorModel, Vector3 startPosition, int movementSpeed) : base(actorModel, startPosition, movementSpeed)
+        public Player(ActorModel actorModel, Vector3 startPosition) : base(actorModel, startPosition, 6)
         {
-            
+            fallDistance = -150f;
         }
 
-        public override void move(Vector3? changeInPosition)
+        public override void move(Vector3? changeInPosition, bool checkTerrainCollision = true)
         {
             if (!currentlyPulledDownByGravity())
             {
                 Vector3 displacement = changeInPosition ?? default(Vector3); // converts Vector3Nullable to Vector3
 
-                if (!wouldCollideWithTerrain(position + (speed * displacement)) && !Falling)
+                if ((!wouldCollideWithTerrain(position + (speed * displacement)) || !checkTerrainCollision) && !Falling)
                 {
                     displace(displacement);
                 }

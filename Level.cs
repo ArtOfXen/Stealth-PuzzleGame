@@ -15,6 +15,7 @@ namespace Game1
         public int numberOfProjectilesAllowed;
         public List<Tile> tiles;
         public float playerStartingAngle;
+        public float goalAngle;
         public bool unlocked;
 
         public Level()

@@ -10,7 +10,6 @@ namespace Game1
 {
     class PullProjectile : Projectile
     {
-        // use DateTime as timer instead of GameTime, since GameTime needs update/draw to function
         double pullStartSeconds;
         double currentSeconds;
         float pullAnimationLength;
@@ -26,7 +25,7 @@ namespace Game1
             inUse = true;
         }
 
-        public override void move(Vector3? changeInPosition = null)
+        public override void move(Vector3? changeInPosition = null, bool checkTerrainCollision = true)
         {
             if (!actionStarted && !MovementBlocked)
             {

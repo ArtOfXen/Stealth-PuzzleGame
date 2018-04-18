@@ -11,23 +11,20 @@ namespace Game1
 
     public enum EnemyClassification
     {
-        pawn,
-        armoured
-        // boulder? moves patrol path constantly, never stopping for any reason. Does not react to projectiles nor chase the player
-        // stalker? actively searches for the player, does not have a normal patrol path. Senses when another guard dies and moves to that location, then searches around that area
-        // gnome? Small and fast, only if implementing pitch controls for player
+        mummy,
+        boulder,
     };
 
     public struct Instruction
     {
         public char type; // T = turn, W = wait, X = moveX, Z = moveZ
-        public int factor; // angle, time, newtile, newTile
+        public int factor; // angle, time, number of tiles to move
     }
 
     public class NPC : Character
     { 
         public List<BoundingSphere> detectionArea; // vision area
-        const int visionRange = 8;
+        int visionRange;
         const float visionSphereRadius = 50f;
 
         public List<Instruction> instructionList;
@@ -35,10 +32,8 @@ namespace Game1
         int currentInstructionIndex;
 
         bool dead;
-        public bool chasingPlayer;
 
         EnemyClassification classification;
-        ProjectileEffectiveness projectileEffectiveness;
 
         double waitStart;
         double waitLength;
@@ -61,7 +56,6 @@ namespace Game1
             dead = false;
             detectionArea = new List<BoundingSphere>();
             classification = enemyStruct.classification;
-            projectileEffectiveness = enemyStruct.projectileEffectiveness;
             instructionList = new List<Instruction>();
             originalInstructionList = new List<Instruction>();
             currentInstructionIndex = 0;
@@ -77,6 +71,8 @@ namespace Game1
             startingAngle = initialAngle;
             changeYaw(MathHelper.ToRadians(startingAngle));
             resettingAngle = false;
+
+            visionRange = enemyStruct.visionRange;
         }
 
         public void update(List<Actor> visionBlockers)
@@ -91,30 +87,14 @@ namespace Game1
             {
                 executeCurrentInstruction();
             }
-            
-            if (!chasingPlayer)
-            {
-                
-            }
-            else
-            {
-                /* note enemy position when player first seen
-                 * always note last position that player was seen and translate to tile coordinates.
-                 * move towards tile
-                 * once tile is reached, look left, then right for player
-                 * if it sees player, repeat
-                 * else, return to original location when player was first seen
-                 */
-                
-            }
         }
 
-        public override void move(Vector3? changeInPosition)
+        public override void move(Vector3? changeInPosition, bool checkTerrainCollision = true)
         {
             // converts Vector3Nullable to Vector3
             Vector3 displacement = changeInPosition ?? default(Vector3);
 
-            if (!dead && !wouldCollideWithTerrain(position + (speed * displacement)) && !Falling)
+            if (!dead && (!wouldCollideWithTerrain(position + (speed * displacement)) || !checkTerrainCollision) && !Falling)
             {
                 displace(displacement);
             }
@@ -302,12 +282,12 @@ namespace Game1
                 if (position.X > destinationTile.centre.X)
                 {
                     // move left
-                    move(new Vector3(-1f, 0f, 0f)); 
+                    move(new Vector3(-1f, 0f, 0f), false); 
                 }
                 else if (position.X < destinationTile.centre.X)
                 {
                     // move right
-                    move(new Vector3(1f, 0f, 0f));
+                    move(new Vector3(1f, 0f, 0f), false);
                 }
                 else
                 {
@@ -323,18 +303,22 @@ namespace Game1
             {
                 if (Math.Abs(position.Z - destinationTile.centre.Z) < speed.Z)
                 {
+                    if (getClassification() == EnemyClassification.boulder)
+                    {
+                        //asdad
+                    }
                     position.Z = destinationTile.centre.Z;
                 }
 
                 if (position.Z > destinationTile.centre.Z)
                 {
                     // move up
-                    move(new Vector3(0f, 0f, -1f));
+                    move(new Vector3(0f, 0f, -1f), false);
                 }
                 else if (position.Z < destinationTile.centre.Z)
                 {
                     //move down
-                    move(new Vector3(0f, 0f, 1f));
+                    move(new Vector3(0f, 0f, 1f), false);
                 }
                 else
                 {
@@ -354,12 +338,15 @@ namespace Game1
             // end of instructions reached
             if (currentInstructionIndex >= instructionList.Count)
             {
-                if (resettingAngle)
+                if (resettingAngle || getClassification() == EnemyClassification.boulder)
                 {
-                    instructionList.RemoveAt(instructionList.Count - 1);
+                    if (getClassification() != EnemyClassification.boulder)
+                    {
+                        instructionList.RemoveAt(instructionList.Count - 1);
+                    }
                     resettingAngle = false;
 
-                    if (!(currentTile.Equals(patrolPath[0])))
+                    if (!(currentTile.coordinates.Equals(patrolPath[0].coordinates)))
                     {
                         List<Instruction> reverseInstructionList = new List<Instruction>(instructionList);
                         instructionList.Clear();
@@ -381,41 +368,10 @@ namespace Game1
 
                         patrolPath.Reverse();
                         currentInstructionIndex = 0;
-                        currentTileIndex = 0;
-                        destinationTileIndex = 0;
-                        if (patrolPath.Count > 1)
-                        {
-                            destinationTileIndex = 1;
-                        }
-                        destinationTile = patrolPath[destinationTileIndex];
-
-                        // if last instruction was a wait instruction, skip it when reversing instructions
-                        //if (instructionList[0].type == 'W' && instructionList[instructionList.Count - 1].type == 'W')
-                        //{
-                        //    currentInstructionIndex = 1;
-                        //}
-
-                        // if wait instruction was only at one end of list, then move it to the other end when reversing instruction list
-                        //if (instructionList[0].type == 'W' && instructionList[instructionList.Count - 1].type != 'W')
-                        //{
-                        //    Instruction waitAtEndInstruction;
-                        //    waitAtEndInstruction.type = 'W';
-                        //    waitAtEndInstruction.factor = instructionList[0].factor;
-
-                        //    instructionList.RemoveAt(0);
-                        //    instructionList.Add(waitAtEndInstruction);
-                        //}
                     }
                     else
                     {
                         currentInstructionIndex = 0;
-                        currentTileIndex = 0;
-                        destinationTileIndex = 0;
-                        if (patrolPath.Count > 1)
-                        {
-                            destinationTileIndex = 1;
-                        }
-                        destinationTile = patrolPath[destinationTileIndex];
                     }
                 }
 
@@ -428,7 +384,7 @@ namespace Game1
                     instructionList.Add(turnToOriginalAngle);
                     resettingAngle = true;
                 }
-                else if (!(currentTile.Equals(patrolPath[0])) && instructionList[instructionList.Count - 1].type != 'T')
+                else if (!currentTile.Equals(patrolPath[0]))
                 {
                     Instruction turnAround;
                     turnAround.type = 'T';
@@ -459,64 +415,19 @@ namespace Game1
                     normaliseAngle(ref rotationTargetAngle);
                     break;
                 case 'X':
-                    // drop down into Z - same code used
-
-                    //currentTileIndex = destinationTileIndex;
-                    //destinationTileIndex = (destinationTileIndex + 1>= patrolPath.Count) ? 0 : destinationTileIndex + 1;
-                    //destinationTile = patrolPath[destinationTileIndex];
-                    //break;
                 case 'Z':
-                    //currentTileIndex = destinationTileIndex;
-                    //destinationTileIndex = (destinationTileIndex + 1 >= patrolPath.Count) ? 0 : destinationTileIndex + 1;
-                    //destinationTile = patrolPath[destinationTileIndex];
                     break;
-                    //case 'Z':
-                    //    for (int i = 0; i < patrolPath.Count; i++)
-                    //    {
-                    //        if (patrolPath[i].coordinates.Y == instructionList[currentInstructionIndex].factor &&
-                    //            patrolPath[i].coordinates.X == patrolPath[currentTileIndex].coordinates.X)
-                    //        {
-                    //            destinationTileIndex = i;
-                    //            destinationTile = patrolPath[destinationTileIndex];
-                    //            break;
-                    //        }
-                    //    }
-                    //    break;
             }
         }
-
-        //public void setPatrolPath(List<Tile> tilesToPatrol)
-        //{
-        //    if (tilesToPatrol.Count != 0)
-        //    {
-        //        patrolPath = tilesToPatrol;
-        //        currentTileIndex = 0;
-        //        position = patrolPath[currentTileIndex].centre;
-        //        if (tilesToPatrol.Count > 1)
-        //        {
-        //            nextTileIndex = 1;
-        //        }
-        //    }
-        //}
 
         public void detectPlayer()
         {
-            chasingPlayer = true;
+            
         }
 
-        public bool isEffectedBy(ProjectileClassification p)
+        public EnemyClassification getClassification()
         {
-            switch (p)
-            {
-                case ProjectileClassification.shock:
-                    return projectileEffectiveness.shock;
-
-                case ProjectileClassification.pull:
-                    return projectileEffectiveness.pull;
-
-                default:
-                    return false;
-            }
+            return classification;
         }
     }
 }

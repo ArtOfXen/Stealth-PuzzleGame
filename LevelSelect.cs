@@ -21,12 +21,11 @@ namespace Game1
         
         MouseState lastMouseState;
 
-        public LevelSelect(GraphicsDevice currentGraphicsDevice, List<Level> currentLevelPack)
+        public LevelSelect(GraphicsDevice currentGraphicsDevice)
         {
             graphicsDevice = currentGraphicsDevice;
 
-            changeLevelPack(currentLevelPack);
-
+            changeLevelPack();
 
             returnButton = new UIButton(null, new Vector2(50f, 50f), Vector2.One, true, "X", Game1.buttonText);
 
@@ -73,9 +72,9 @@ namespace Game1
             spriteBatch.DrawString(returnButton.buttonFont, returnButton.buttonText, new Vector2(returnButton.getPosition().X - (returnButton.textSize.X / 2), returnButton.getPosition().Y - (returnButton.textSize.Y / 2)), Color.Red);
         }
 
-        public static void changeLevelPack(List<Level> newLevelPack)
+        public static void changeLevelPack()
         {
-            levelPack = newLevelPack;
+            levelPack = Game1.currentLevelPack;
             updateButtons();
         }
 

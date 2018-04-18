@@ -21,7 +21,7 @@ namespace Game1
 
         }
 
-        public override void move(Vector3? changeInPosition = default(Vector3?))
+        public override void move(Vector3? changeInPosition = default(Vector3?), bool checkTerrainCollision = true)
         {
             base.move(changeInPosition);
         }

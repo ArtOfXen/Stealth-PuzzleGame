@@ -60,11 +60,6 @@ namespace Game1
 
         public virtual void changeActiveStatus()
         {
-
-            /* 
-             * need to add sounds for activation and deactivation, eminating from the player, not the obstacle, to let player know when obstacles change
-             */
-
             if (active)
             {
                 active = false;
@@ -96,7 +91,6 @@ namespace Game1
                 {
                     foreach (BasicEffect effect in mesh.Effects)
                     {
-                        //effect.AmbientLightColor = new Vector3(1f, 0, 0);
                         effect.EnableDefaultLighting();
                         effect.View = viewMatrix;
                         effect.World = attachedActors[i].rotation * Matrix.CreateTranslation(attachedActors[i].position);

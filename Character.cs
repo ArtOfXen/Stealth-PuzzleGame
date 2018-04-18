@@ -15,6 +15,8 @@ namespace Game1
         /// </summary>
         
         protected Vector3 speed;
+        protected float fallDistance;
+
         private float velocityDueToGravity;
         private static List<Actor> movementBlockers;
 
@@ -23,6 +25,7 @@ namespace Game1
             speed = new Vector3(movementSpeed, 0f, movementSpeed);
             Falling = false;
             velocityDueToGravity = 3f;
+            fallDistance = -50f;
             MovementBlocked = false;
         }
 
@@ -56,7 +59,7 @@ namespace Game1
             }
         }
 
-        public virtual void move(Vector3? changeInPosition = null)
+        public virtual void move(Vector3? changeInPosition = null, bool checkTerrainCollision = true)
         {
             if (!currentlyPulledDownByGravity())
             {
@@ -69,10 +72,18 @@ namespace Game1
         {
             if (Falling)
             {
-                speed = Vector3.Down; // unable to move left or right anymore, only down
-                displace(new Vector3(0f, velocityDueToGravity, 0f));
-                velocityDueToGravity++;
-                return true;
+                if (position.Y > fallDistance)
+                {
+                    speed = Vector3.Down; // unable to move left or right anymore, only down
+                    displace(new Vector3(0f, velocityDueToGravity, 0f));
+                    velocityDueToGravity++;
+                    return true;
+                }
+                else
+                {
+                    Falling = false;
+                    return false;
+                }
             }
             else
             {

@@ -37,28 +37,6 @@ namespace Game1
             initiallyActive = currentlyActive;
         }
 
-        //public virtual void update()
-        //{
-        //    double currentTime = DateTime.Now.TimeOfDay.TotalSeconds;
-
-        //    if (intervalTimer != null)
-        //    {
-        //        if (currentTime > lastIntervalTime + intervalTimer)
-        //        {
-        //            lastIntervalTime = currentTime;
-        //            activateTrigger(true);
-        //        }
-
-        //        if (resetTimer != null)
-        //        {
-        //            if (activated && (currentTime > activationTime + resetTimer))
-        //            {
-        //                activateTrigger(true);
-        //                activated = false;
-        //            }
-        //        }
-        //    }
-        //}
         public void checkResetTimer()
         {
             double currentTime = DateTime.Now.TimeOfDay.TotalSeconds;

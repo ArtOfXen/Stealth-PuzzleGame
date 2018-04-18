@@ -5,6 +5,14 @@ namespace Game1
 {
     public class ActorModel
     {
+
+        public enum ModelEffect
+        {
+            DefaultLighting,
+            Fog,
+            Player,
+        };
+
         public Model model;
         public Vector3 boxSize; // distance from edge to edge
         public Vector3 boxExtents; // distance from centre to edge
@@ -14,7 +22,7 @@ namespace Game1
         public bool blocksMove; // characters can't move through this
         public bool blocksVis; // stops enemy vision
 
-        public ActorModel(Model newModel, bool blocksCharacterMovement, bool blocksEnemyVision)
+        public ActorModel(Model newModel, bool blocksCharacterMovement, bool blocksEnemyVision, ModelEffect effect)
         {
             model = newModel;
             
@@ -23,6 +31,29 @@ namespace Game1
 
             blocksMove = blocksCharacterMovement;
             blocksVis = blocksEnemyVision;
+
+            switch(effect)
+            {
+                case ModelEffect.Fog:
+                    (model.Meshes[0].Effects[0] as BasicEffect).View = Matrix.CreateLookAt(new Vector3(0, 8, 22), Vector3.Zero, Vector3.Up);
+                    (model.Meshes[0].Effects[0] as BasicEffect).EnableDefaultLighting();
+                    (model.Meshes[0].Effects[0] as BasicEffect).SpecularColor = Vector3.Zero;
+                    (model.Meshes[0].Effects[0] as BasicEffect).PreferPerPixelLighting = true;
+                    (model.Meshes[0].Effects[0] as BasicEffect).FogColor = Color.Black.ToVector3();
+                    (model.Meshes[0].Effects[0] as BasicEffect).FogEnabled = true;
+                    (model.Meshes[0].Effects[0] as BasicEffect).FogStart = 0.0f;
+                    (model.Meshes[0].Effects[0] as BasicEffect).FogEnd = 750.0f;
+                    break;
+
+                case ModelEffect.DefaultLighting:
+                    (model.Meshes[0].Effects[0] as BasicEffect).EnableDefaultLighting();
+                    break;
+
+                case ModelEffect.Player:
+                    (model.Meshes[0].Effects[0] as BasicEffect).EnableDefaultLighting();
+                    (model.Meshes[0].Effects[0] as BasicEffect).LightingEnabled = true;
+                    break;
+            }
         }
 
         Vector3 calculateBoundingBox()

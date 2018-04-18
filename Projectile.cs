@@ -12,7 +12,7 @@ namespace Game1
     public enum ProjectileClassification
     {
         none,
-        shock, // kills unarmoured enemies
+        power, // activates switches
         pull, // pulls enemies towards the projectile when action activated
         teleport // when activated, instantly moves player to location of this projectile
     };
@@ -35,7 +35,7 @@ namespace Game1
             changeYaw(MathHelper.ToRadians(angleOfFire));
         }
 
-        public override void move(Vector3? changeInPosition = null)
+        public override void move(Vector3? changeInPosition = null, bool checkTerrainCollision = true)
         {
             if (!MovementBlocked)
             {
